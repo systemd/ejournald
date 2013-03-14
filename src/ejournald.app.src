@@ -1,0 +1,9 @@
+%% -*- erlang -*-
+{application, ejournald, [
+    {description, "journald adapter"},
+	{applications, [kernel, stdlib]},
+	{registered, []},
+	{included_applications, []},
+	{env, [
+    ]}
+]}.

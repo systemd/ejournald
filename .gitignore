@@ -1,0 +1,4 @@
+ebin/
+*.so
+*.o
+tetrapak/.local.cache
