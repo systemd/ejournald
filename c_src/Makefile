@@ -14,7 +14,7 @@ all : $(PRIVDIR)/journald_api.so
 
 $(PRIVDIR)/journald_api.so : journald_api.o
 	mkdir -p $(PRIVDIR)
-	$(CC) $(LDFLAGS) -o $@ $^
+	$(CC) $^ $(LDFLAGS) -o $@
 
 clean:
 	$(RM) -f $(PRIVDIR)/journald_api.so journald_api.o
