@@ -20,16 +20,40 @@
 
 -module(journald_api).
 
+-define(SYSLOG_ID, "SYSLOG_IDENTIFIER").
+
 %% External API
 -export([sendv/1, stream_fd/3]).
 
 -on_load(load_nif/0).
 
-sendv(_X) ->
+-type value() :: number() | atom() | iolist().
+-spec sendv([{iolist(),value()}]) -> any().
+ 
+sendv(Args) ->
+    sendv_nif(list_conversion(Args, no_syslog)).
+
+sendv_nif(_Args) ->
     "NIF library not loaded".
 
 stream_fd(_A, _B, _C) -> 
     "NIF library not loaded".
+
+list_conversion([], syslog)    -> [];	 				% SYSLOG_IDENTIFIER allready set
+list_conversion([], no_syslog) ->					% set SYSLOG_IDENTIFIER 
+    [[?SYSLOG_ID, $=, to_list(node())]];
+list_conversion([{?SYSLOG_ID,V}|T], _) ->
+    [[?SYSLOG_ID, $=, to_list(V)] | list_conversion(T, syslog)];			% SYSLOG_IDENTIFIER was set by user				
+list_conversion([{E,V}|T], _)  ->
+    [[E, $=, to_list(V)] | list_conversion(T, no_syslog)]; 
+list_conversion([_|T], SYSLOG) ->					% skip bad argument
+    list_conversion(T, SYSLOG);
+list_conversion(_,_) -> [].						 
+
+to_list(V) when is_integer(V) -> integer_to_list(V);
+to_list(V) when is_float(V)   -> float_to_list(V);
+to_list(V) when is_atom(V)    -> atom_to_binary(V, utf8);
+to_list(V) -> V. 
 
 load_nif() ->
     Dir = "priv",
@@ -39,5 +63,3 @@ load_nif() ->
     end,
     Lib = filename:join(PrivDir, "journald_api"),   % create priv path so journald_api.so 
     erlang:load_nif(Lib, 0).						% load NIF 
-
-

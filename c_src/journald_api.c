@@ -44,31 +44,32 @@ static int load(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info)
 */
 static ERL_NIF_TERM nif_sendv(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {  
-        unsigned int len=0, i=0; 
+        unsigned int len=0, i=0;
         struct iovec *iov = NULL; 
         ErlNifBinary item;
         ERL_NIF_TERM buffer, tail;
         
         if (!enif_get_list_cell(env, argv[0], &buffer, &tail) 
-                || !enif_get_list_length(env, argv[0], &len) || len == 0)
-            return enif_make_badarg(env); 
+                || !enif_get_list_length(env, argv[0], &len) || len==0)
+            return atom_error; 
 
         iov = alloca(len * sizeof(struct iovec));
         do {
-            if (!enif_inspect_iolist_as_binary(env, buffer, &item)    //binary conversion from list element 
-                    && !enif_inspect_binary(env, buffer, &item))
-                return enif_make_badarg(env);
-
-            iov[i].iov_base = item.data;                              //copy process into iovec 
-            iov[i].iov_len = item.size;
-            i++;
+            if (enif_inspect_iolist_as_binary(env, buffer, &item)    	//binary conversion from list element 
+                    || enif_inspect_binary(env, buffer, &item))
+	    {            
+            	iov[i].iov_base = item.data;                          	//copy process into iovec 
+            	iov[i].iov_len = item.size;
+            	i++;
+	    }
+	    else len--;							// skip bad argument
 
         } while(enif_get_list_cell(env, tail, &buffer, &tail));
 
-        if (sd_journal_sendv(iov, len) >= 0) 
+        if (sd_journal_sendv(iov, len) == 0) 
             return atom_ok;
-
-        return atom_error; 
+        
+	return atom_error; 
 }
 /*
     convert the first parameter to binary and the secound and third to int and call sd_journal_stream_fd(3)
@@ -91,7 +92,7 @@ static ERL_NIF_TERM nif_stream_fd(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
 }
 
 static ErlNifFunc nif_funcs[] = { 
-        {"sendv", 1, nif_sendv},
+        {"sendv_nif", 1, nif_sendv},
         {"stream_fd", 3, nif_stream_fd}
 };
 

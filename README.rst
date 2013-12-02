@@ -18,11 +18,11 @@ Usage
 -----
 
 journald_api:sendv([Parameter1, Parameter2,...,ParameterN]) is equal to sd_journal_sendv().
-Please deliver the parameters as a list. You can use io_lists as list elements for parameters with multiline content. 
+Please deliver the parameters as a tuple {"VARIABLE", value}. You can use atom, int, float, or iolist (string, binary) as value. 
 
 Example for sendv(): 
 
-	journald_api:sendv(["MESSAGE=TEST", "PRIORITY=1"]). 
+	journald_api:sendv([{"MESSAGE", test}, {"PRIORITY", 1}]). 
 
 You can use these input parameters: http://0pointer.de/public/systemd-man/systemd.journal-fields.html
 
