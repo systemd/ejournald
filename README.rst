@@ -22,14 +22,25 @@ Please deliver the parameters as a tuple {"VARIABLE", value}. You can use atom, 
 
 Example for sendv(): 
 
-	journald_api:sendv([{"MESSAGE", test}, {"PRIORITY", 1}]). 
+    journald_api:sendv([{"MESSAGE", test}, {"PRIORITY", 1}]). 
 
 You can use these input parameters: http://0pointer.de/public/systemd-man/systemd.journal-fields.html
 
 journald_api:stream_fd(identifier, priority, level_prefix) stream to journal by calling sd_journal_stream_fd(3). 
+stream_fd/3 returns a stream file descriptor you can use in write_fd to write into the journal. The journal entries SYSLOG_IDENTIFIER = identifier and PRIORITY=priority will be set for all messages send through this file descriptor. level_prefix is a boolean. If true kernel-style log priority prefixes can be interpreted (not implemented yet).
 
-Example for stream_fd/3: 
+journald_api:write_fd(File_descriptor, Message) writes Message into journald using a file descriptor from stream_fd.
+Message must be a string. Messages are sent after "\n" is written.
 
-	journald_api:stream_fd("TEST",1,2).
+Example for stream_fd/3 and write_fd/2: 
 
-stream_fd/3 returns a stream file descriptor you can use to write into the journal.
+    Fd = journald_api:stream_fd("id",5,0).
+    journald_api:write_fd(Fd, "notice\n").
+
+will produve the following message in the journal:
+        
+    PRIORITY=5
+    SYSLOG_IDENTIFIER=id
+    MESSAGE=notice
+
+journald_api:close_fd(File_descriptor) can be used to close File_descriptor manually.

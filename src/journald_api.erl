@@ -23,7 +23,7 @@
 -define(SYSLOG_ID, "SYSLOG_IDENTIFIER").
 
 %% External API
--export([sendv/1, stream_fd/3]).
+-export([sendv/1, stream_fd/3, write_fd/2, close_fd/1]).
 
 -on_load(load_nif/0).
 
@@ -39,16 +39,22 @@ sendv_nif(_Args) ->
 stream_fd(_A, _B, _C) -> 
     "NIF library not loaded".
 
-list_conversion([], syslog)    -> [];	 				% SYSLOG_IDENTIFIER allready set
-list_conversion([], no_syslog) ->					% set SYSLOG_IDENTIFIER 
+write_fd(_Fd, _Msg) ->
+    "NIF library not loaded".
+
+close_fd(_Fd) ->
+    "NIF library not loaded".
+
+list_conversion([], syslog)    -> [];               % SYSLOG_IDENTIFIER allready set
+list_conversion([], no_syslog) ->                   % set SYSLOG_IDENTIFIER 
     [[?SYSLOG_ID, $=, to_list(node())]];
 list_conversion([{?SYSLOG_ID,V}|T], _) ->
-    [[?SYSLOG_ID, $=, to_list(V)] | list_conversion(T, syslog)];			% SYSLOG_IDENTIFIER was set by user				
+    [[?SYSLOG_ID, $=, to_list(V)] | list_conversion(T, syslog)];     % SYSLOG_IDENTIFIER was set by user                
 list_conversion([{E,V}|T], _)  ->
     [[E, $=, to_list(V)] | list_conversion(T, no_syslog)]; 
-list_conversion([_|T], SYSLOG) ->					% skip bad argument
+list_conversion([_|T], SYSLOG) ->                    % skip bad argument
     list_conversion(T, SYSLOG);
-list_conversion(_,_) -> [].						 
+list_conversion(_,_) -> [].                         
 
 to_list(V) when is_integer(V) -> integer_to_list(V);
 to_list(V) when is_float(V)   -> float_to_list(V);
@@ -57,9 +63,9 @@ to_list(V) -> V.
 
 load_nif() ->
     Dir = "priv",
-    PrivDir = case code:priv_dir(ejournald) of   % check existence of priv folder 
+    PrivDir = case code:priv_dir(ejournald) of      % check existence of priv folder 
         {error, _} -> Dir; 
         X -> X
     end,
     Lib = filename:join(PrivDir, "journald_api"),   % create priv path so journald_api.so 
-    erlang:load_nif(Lib, 0).						% load NIF 
+    erlang:load_nif(Lib, 0).                        % load NIF 
