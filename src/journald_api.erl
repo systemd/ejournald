@@ -23,7 +23,12 @@
 -define(SYSLOG_ID, "SYSLOG_IDENTIFIER").
 
 %% External API
--export([sendv/1, stream_fd/3, write_fd/2, close_fd/1]).
+-export([sendv/1, stream_fd/3, write_fd/2, close_fd/1,
+        open/0, open_directory/1, close/1, next/1, 
+        previous/1, get_data/2,    add_match/2, add_conjunction/1, 
+        add_disjunction/1, flush_matches/1, seek_head/1, seek_tail/1,  
+        get_cursor/1, test_cursor/2, seek_cursor/2, query_unique/2,
+        enumerate_unique/1, restart_unique/1, open_notifier/2]).
 
 -on_load(load_nif/0).
 
@@ -45,6 +50,62 @@ write_fd(_Fd, _Msg) ->
 close_fd(_Fd) ->
     "NIF library not loaded".
 
+open() ->
+    "NIF library not loaded".
+
+open_directory(_Arg) ->
+    "NIF library not loaded".
+
+close(_Arg) ->    
+    "NIF library not loaded".
+
+next(_Arg) ->
+    "NIF library not loaded".
+
+previous(_Arg) -> 
+    "NIF library not loaded".
+
+get_data(_Arg1, _Arg2) -> 
+     "NIF library not loaded".
+
+add_match(_Arg1, _Arg2) -> 
+     "NIF library not loaded".
+
+add_disjunction(_Arg) -> 
+     "NIF library not loaded".
+
+add_conjunction(_Arg) -> 
+     "NIF library not loaded".
+
+flush_matches(_Arg) -> 
+     "NIF library not loaded".
+
+seek_head(_Arg) -> 
+     "NIF library not loaded".
+
+seek_tail(_Arg) -> 
+   "NIF library not loaded".
+
+get_cursor(_Arg) ->
+    "NIF library not loaded".
+
+test_cursor(_Arg1, _Arg2) ->
+    "NIF library not loaded".
+
+seek_cursor(_Arg1, _Arg2) ->
+    "NIF library not loaded".
+
+query_unique(_Arg1, _Arg2) ->
+    "NIF library not loaded".
+
+enumerate_unique(_Arg) ->
+    "NIF library not loaded".
+
+restart_unique(_Arg) ->
+    "NIF library not loaded".
+
+open_notifier(_Arg1, _Arg2) ->
+    "NIF library not loaded".
 list_conversion([], syslog)    -> [];               % SYSLOG_IDENTIFIER allready set
 list_conversion([], no_syslog) ->                   % set SYSLOG_IDENTIFIER 
     [[?SYSLOG_ID, $=, to_list(node())]];

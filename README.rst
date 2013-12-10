@@ -43,4 +43,47 @@ will produve the following message in the journal:
     SYSLOG_IDENTIFIER=id
     MESSAGE=notice
 
-journald_api:close_fd(File_descriptor) can be used to close File_descriptor manually.
+Reading from the journal: The following command sequence describes a typical workflow. 
+
+    > {ok, Journal} = journald_api:open().                            // opens ALL local available journals
+    > {ok, JournalDir} = journald_api:open(<Path>).    // open all journals in specific directory
+
+    > journald_api:next(Journal).                        //After the open command the head needs to be moved
+    > journald_api:get_data(Journal, "MESSAGE").        
+    {ok,"MESSAGE= first message"}                     // first entry of my journal
+
+    > journald_api:seek_tail(Journal).                     // always get the last entry
+    > journald_api:previous(Journal).                          // after setting properties you always need to move the cursor (next, previous)
+    > journald_api:get_data(Journal, "MESSAGE").
+    {ok,"MESSAGE= another message"}
+
+    > journald_api:add_match(Journal, "PRIORITY=7").   // just take entries with PRIORITY=7
+    > journald_api:previous(Journal).                      // since the head is at the end of the journal he needs to search backwards
+    > journald_api:get_data(Journal, "PRIORITY").
+    {ok,"PRIORITY=7"}
+
+    > journald_api:add_disjunction(Journal).               // the next add_match should be added as a disjunction (conjunction also available)
+    > journald_api:add_match(Journal, "PRIORITY=5").   // now all entries with PRIORITY=7 or PRIORITY=5 are considered
+
+    > journald_api:flush_matches(Journal).                 // get rid of the added matches
+    > journald_api:next(Journal).
+    > journald_api:get_data(Journal, "PRIORITY").
+    {ok,"PRIORITY=3"}
+
+    > journald_api:seek_head(Journal).                    
+    > journald_api:next().                            // go to oldest available entry
+
+    > {ok, Cursor} = journald_api:get_cursor(Journal).            // store ID of the current entry in Cursor
+    > journald_api:test_cursor(Journal, Cursor).    // test if entries have same ID
+    > journald_api:seek_cursor(Journal, Cursor).
+    > journald_api:next(Journal).                                // move to the Cursor
+
+    > journald_api:close(Journal).                    // close the journal, Journal won't be able to get_data from now on
+
+
+The upper example consists of all currently implemented methods. 
+
+Moving the head against the borders (start and end of the journal) won't result in a crash, but the head will jump somewhere in the middle of the journal. 
+
+journald_api:seek_head/1 moves the cursor in front of the first entry and one has to call journald_api:next/1 to get the first entry.
+journald_api:seek_tail/1 moves the cursor behind the last entry and one has to call journald_api:previous/1 to get the last entry.

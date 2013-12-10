@@ -3,10 +3,11 @@ ejournald
 
 Ejournald is a journald binding for Erlang.
 
-Version 1.1.0 - xx Dec 2013
+Version 1.1.0 - 10 Dec 2013
 ---------------------------
 
 * Added write_fd
+* Added query functions
 
 Version 1.0.1 - 05 Dec 2013
 ---------------------------
