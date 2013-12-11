@@ -21,8 +21,6 @@
 */
 
 #include "erl_nif.h"
-#include <assert.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <systemd/sd-journal.h>
@@ -375,19 +373,19 @@ static ERL_NIF_TERM nif_add_disjunction(ErlNifEnv* env, int argc, const ERL_NIF_
     return atom_ok;
 }
 
-static ERL_NIF_TERM nif_add_conjunction(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-
-    journal_container *jc;
-
-    if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
-        
-    int r = sd_journal_add_conjunction(jc->journal_pointer);    
-    if (r < 0)
-        return enif_make_tuple2(env, atom_error, enif_make_string(env,"Failed to add conjunction",ERL_NIF_LATIN1));
-
-    return atom_ok;
-}
+//static ERL_NIF_TERM nif_add_conjunction(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+//
+//    journal_container *jc;
+//
+//    if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
+//        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+//        
+//    int r = sd_journal_add_conjunction(jc->journal_pointer);    
+//    if (r < 0)
+//        return enif_make_tuple2(env, atom_error, enif_make_string(env,"Failed to add conjunction",ERL_NIF_LATIN1));
+//
+//    return atom_ok;
+//}
 
 static ERL_NIF_TERM nif_seek_head(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 
@@ -600,7 +598,7 @@ static ErlNifFunc nif_funcs[] =
     {"get_data", 2, nif_get_data},
     {"add_match", 2, nif_add_match},
     {"add_disjunction", 1, nif_add_disjunction},
-    {"add_conjunction", 1, nif_add_conjunction},
+//    {"add_conjunction", 1, nif_add_conjunction},
     {"flush_matches", 1, nif_flush_matches},
     {"seek_head", 1, nif_seek_head},
     {"seek_tail", 1, nif_seek_tail},
