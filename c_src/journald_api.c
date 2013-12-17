@@ -538,54 +538,6 @@ static ERL_NIF_TERM nif_restart_unique(ErlNifEnv* env, int argc, const ERL_NIF_T
     return atom_ok;
 }
 
-static void * notifier_run(void *arg){
-
-    journal_container *jc = (journal_container *) arg;
-    ErlNifEnv *t_env;
-    int changes;
-    
-    //waits 1000 microseconds for a new journal entry
-    sd_journal_wait(jc->journal_pointer, 1000);
-     
-    while(1){
-
-		if( jc->notifier_flag == 1 )
-			enif_thread_exit(NULL);
-
-        	changes = sd_journal_wait(jc->journal_pointer, 1000);
-	   	if( changes != SD_JOURNAL_NOP ){
-        		t_env = enif_alloc_env();
-        		if(!enif_send(NULL, &(jc->pid), t_env, enif_make_atom(t_env, "journal_changed"))){
-            		    enif_thread_exit(NULL);
-            		    enif_clear_env(t_env);
-        		}
-		}
-    }
-
-    return NULL;
-}
-
-static ERL_NIF_TERM nif_open_notifier (ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-
-    journal_container *jc;
-    if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
-    
-    ErlNifPid pid;
-    if(!enif_get_local_pid(env, argv[1], &pid))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
-
-    jc->pid = pid;
-    jc->notifier_flag = 0;
-        
-    if(enif_thread_create("notifier_worker", &jc->tid, notifier_run, (void *) jc, NULL) != 0)
-        return enif_make_tuple2(env, atom_error, enif_make_string(env,"thread creation failed",ERL_NIF_LATIN1));
-
-    jc->notifier_used = 1;
-
-    return atom_ok;
-}
-
 static ERL_NIF_TERM nif_enumerate_data(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 
     journal_container *jc;
@@ -618,6 +570,78 @@ static ERL_NIF_TERM nif_restart_data(ErlNifEnv* env, int argc, const ERL_NIF_TER
     return atom_ok;
 }
 
+static void * notifier_run(void *arg){
+
+    journal_container *jc = (journal_container *) arg;
+    ErlNifEnv *t_env;
+    int changes;
+     
+    changes = sd_journal_wait(jc->journal_pointer, (uint64_t) 1000);
+    while(1){
+
+		if( jc->notifier_flag == 1 ){
+			jc->notifier_flag = 0; 
+			enif_thread_exit(NULL);
+		}
+
+    		//waits 1000 microseconds for a new journal entry
+        	changes = sd_journal_wait(jc->journal_pointer, (uint64_t) 1000);
+	   	if( changes != SD_JOURNAL_NOP ){
+        		t_env = enif_alloc_env();
+        		if(!enif_send(NULL, &(jc->pid), t_env, enif_make_atom(t_env, "journal_changed"))){
+            		    enif_thread_exit(NULL);
+            		    enif_clear_env(t_env);
+        		}
+		}
+    }
+
+    return NULL;
+}
+
+static ERL_NIF_TERM nif_open_notifier (ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+
+    journal_container *jc;
+    if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
+        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+
+    if(jc->notifier_used == 1)
+       return enif_make_tuple2(env, atom_error, enif_make_string(env,"notifier already exists",ERL_NIF_LATIN1));
+
+    if(jc->notifier_flag==1)
+       return enif_make_tuple2(env, atom_error, enif_make_string(env,"old notifier not closed yet",ERL_NIF_LATIN1));
+
+    ErlNifPid pid;
+    if(!enif_get_local_pid(env, argv[1], &pid))
+        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+
+    jc->pid = pid;
+    jc->notifier_flag = 0;
+        
+    if(enif_thread_create("notifier_worker", &jc->tid, notifier_run, (void *) jc, NULL) != 0)
+        return enif_make_tuple2(env, atom_error, enif_make_string(env,"thread creation failed",ERL_NIF_LATIN1));
+
+    jc->notifier_used = 1;
+
+    return atom_ok;
+}
+
+static ERL_NIF_TERM nif_close_notifier (ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+
+    journal_container *jc;
+    if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
+        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+
+    if(jc->notifier_used == 0)
+        return enif_make_tuple2(env, atom_error, enif_make_string(env,"there is no notifier",ERL_NIF_LATIN1));
+	
+    //setting the notifier flag will close the notifier thread
+    jc->notifier_flag=1;
+    jc->notifier_used=0;
+
+    return atom_ok;
+}
+
+
 static ErlNifFunc nif_funcs[] =
 {    
     {"sendv_nif", 1, nif_sendv},
@@ -643,9 +667,10 @@ static ErlNifFunc nif_funcs[] =
     {"query_unique", 2, nif_query_unique},
     {"enumerate_unique", 1, nif_enumerate_unique},
     {"restart_unique", 1, nif_restart_unique},
-    {"open_notifier", 2, nif_open_notifier},
     {"enumerate_data", 1, nif_enumerate_data},
-    {"restart_data", 1, nif_restart_data}
+    {"restart_data", 1, nif_restart_data},
+    {"open_notifier", 2, nif_open_notifier},
+    {"close_notifier", 1, nif_close_notifier}
 };
 
 ERL_NIF_INIT(journald_api,nif_funcs,load,NULL,NULL,NULL)
