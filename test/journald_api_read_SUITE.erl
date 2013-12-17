@@ -3,7 +3,7 @@
 -export([all/0, groups/0, init_per_suite/1, end_per_suite/1, ets_owner/0]).
 
 -export([just_get_data/1, next_entry/1, previous_entry/1, add_match/1, flush_matches/1,
-        add_conjunction/1, add_disjunction/1, seek_head/1, seek_tail/1,
+        add_disjunction/1, seek_head/1, seek_tail/1,
         cursor_test/1, is_right_cursor/2, stress1/1, stress2/1, receiver/0]). 
 
 -export([send_test/1]).
@@ -18,7 +18,7 @@ all() ->
 
 groups()    ->  [{session, [shuffle, sequence, {repeat, 5}], 
                 [just_get_data, next_entry, previous_entry, add_match, flush_matches,
-                add_conjunction, add_disjunction, seek_head, seek_tail]},
+                add_disjunction, seek_head, seek_tail]},
                 {stress, [], [stress1, stress2]}].
 
 ets_owner() ->
@@ -81,13 +81,13 @@ flush_matches(Config) ->
     [{journal, Journal}] = ets:lookup(TabId, journal),
     ok = journald_api:flush_matches(Journal).
 
-add_conjunction(Config) ->
-    TabId = ?config(table, Config),
-    [{journal, Journal}] = ets:lookup(TabId, journal),
-    case journald_api:add_conjunction(Journal) of
-        ok            -> ok;
-        {error, Msg}     -> io:format(Msg)
-    end.
+%add_conjunction(Config) ->
+%    TabId = ?config(table, Config),
+%    [{journal, Journal}] = ets:lookup(TabId, journal),
+%    case journald_api:add_conjunction(Journal) of
+%        ok            -> ok;
+%        {error, Msg}     -> io:format(Msg)
+%    end.
 
 add_disjunction(Config) ->
     TabId = ?config(table, Config),
@@ -116,22 +116,21 @@ seek_tail(Config) ->
 cursor_test(Config) ->
     TabId = ?config(table, Config),
     [{journal, Journal}] = ets:lookup(TabId, journal),
+    ok = journald_api:seek_tail(Journal),
+    ok = journald_api:previous(Journal),
     case journald_api:get_cursor(Journal) of
         {ok, Cursor}    -> is_right_cursor(Journal, Cursor);
         {error, Msg}     -> io:format(Msg)
     end.
-%%RANDOM API TEST
+%%END RANDOM API TEST
 
+%test cursor of last entry and compare to second last entry
 is_right_cursor(Journal, Cursor) ->
-    is_atom(journald_api:next(Journal)),
-    eaddrnotavail = journald_api:test_cursor(Journal, Cursor),
-    journald_api:previous(Journal),
     ok = journald_api:test_cursor(Journal, Cursor),
-    ok = journald_api:next(Journal),
-    ok = journald_api:seek_cursor(Journal, Cursor),
+    ok = journald_api:previous(Journal),
+    eaddrnotavail = journald_api:test_cursor(Journal, Cursor),
     ok = journald_api:next(Journal),
     ok = journald_api:test_cursor(Journal, Cursor).
-    
 
 %write and read parallel    
 stress1(_) ->               

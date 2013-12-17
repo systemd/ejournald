@@ -20,6 +20,9 @@
  DEALINGS IN THE SOFTWARE.
 */
 
+//to suppress logging information about this file
+#define SD_JOURNAL_SUPPRESS_LOCATION
+
 #include "erl_nif.h"
 #include <stdlib.h>
 #include <string.h>
@@ -583,6 +586,38 @@ static ERL_NIF_TERM nif_open_notifier (ErlNifEnv* env, int argc, const ERL_NIF_T
     return atom_ok;
 }
 
+static ERL_NIF_TERM nif_enumerate_data(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+
+    journal_container *jc;
+
+    if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
+        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+
+    int r;
+    char *d;
+    size_t l;
+
+    r = sd_journal_enumerate_data(jc->journal_pointer, (void *) &d, &l);
+    if( r < 0) return enif_make_tuple2(env, atom_error, enif_make_string(env,"enumerating failed",ERL_NIF_LATIN1));
+    else if (r == 0) return atom_eaddrnotavail;
+ 
+    ERL_NIF_TERM term = enif_make_string_len(env, d , l, ERL_NIF_LATIN1);
+
+    return enif_make_tuple2(env, atom_ok, term);
+}
+
+static ERL_NIF_TERM nif_restart_data(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+
+    journal_container *jc;
+
+    if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
+        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+        
+    sd_journal_restart_data(jc->journal_pointer);    
+
+    return atom_ok;
+}
+
 static ErlNifFunc nif_funcs[] =
 {    
     {"sendv_nif", 1, nif_sendv},
@@ -608,7 +643,9 @@ static ErlNifFunc nif_funcs[] =
     {"query_unique", 2, nif_query_unique},
     {"enumerate_unique", 1, nif_enumerate_unique},
     {"restart_unique", 1, nif_restart_unique},
-    {"open_notifier", 2, nif_open_notifier}
+    {"open_notifier", 2, nif_open_notifier},
+    {"enumerate_data", 1, nif_enumerate_data},
+    {"restart_data", 1, nif_restart_data}
 };
 
 ERL_NIF_INIT(journald_api,nif_funcs,load,NULL,NULL,NULL)

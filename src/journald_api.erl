@@ -28,7 +28,8 @@
         previous/1, get_data/2,    add_match/2, add_conjunction/1, 
         add_disjunction/1, flush_matches/1, seek_head/1, seek_tail/1,  
         get_cursor/1, test_cursor/2, seek_cursor/2, query_unique/2,
-        enumerate_unique/1, restart_unique/1, open_notifier/2]).
+        enumerate_unique/1, restart_unique/1, open_notifier/2,
+	   enumerate_data/1, restart_data/1]).
 
 -on_load(load_nif/0).
 
@@ -106,6 +107,13 @@ restart_unique(_Arg) ->
 
 open_notifier(_Arg1, _Arg2) ->
     "NIF library not loaded".
+
+enumerate_data(_Arg) ->
+    "NIF library not loaded".
+
+restart_data(_Arg) ->
+    "NIF library not loaded".
+
 list_conversion([], syslog)    -> [];               % SYSLOG_IDENTIFIER allready set
 list_conversion([], no_syslog) ->                   % set SYSLOG_IDENTIFIER 
     [[?SYSLOG_ID, $=, to_list(node())]];
