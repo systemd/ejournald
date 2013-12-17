@@ -37,7 +37,7 @@
 -spec sendv([{iolist(),value()}]) -> any().
  
 sendv(Args) ->
-    sendv_nif(list_conversion(Args, no_syslog)).
+    sendv_nif(list_conversion(Args)).
 
 sendv_nif(_Args) ->
     "NIF library not loaded".
@@ -117,16 +117,12 @@ restart_data(_Arg) ->
 close_notifier(_Arg) ->
     "NIF library not loaded".
 
-list_conversion([], syslog)    -> [];               % SYSLOG_IDENTIFIER allready set
-list_conversion([], no_syslog) ->                   % set SYSLOG_IDENTIFIER 
-    [[?SYSLOG_ID, $=, to_list(node())]];
-list_conversion([{?SYSLOG_ID,V}|T], _) ->
-    [[?SYSLOG_ID, $=, to_list(V)] | list_conversion(T, syslog)];     % SYSLOG_IDENTIFIER was set by user                
-list_conversion([{E,V}|T], _)  ->
-    [[E, $=, to_list(V)] | list_conversion(T, no_syslog)]; 
-list_conversion([_|T], SYSLOG) ->                    % skip bad argument
-    list_conversion(T, SYSLOG);
-list_conversion(_,_) -> [].                         
+list_conversion([])    -> [];
+list_conversion([{E,V}|T])  ->
+    [[E, $=, to_list(V)] | list_conversion(T)]; 
+list_conversion([_|T]) ->                          % skip bad argument
+    list_conversion(T);
+list_conversion(_) -> [].                         
 
 to_list(V) when is_integer(V) -> integer_to_list(V);
 to_list(V) when is_float(V)   -> float_to_list(V);
