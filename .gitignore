@@ -1,4 +1,5 @@
 ebin/
 *.so
 *.o
+.arcconfig
 tetrapak/.local.cache
