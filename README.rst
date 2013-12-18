@@ -87,12 +87,15 @@ Reading from the journal: The following command sequence describes a typical wor
     > flush().
     Shell got journal_changed
 
+    > journald_api:close_notifier(Journal).						// close the notifier (so you could start a new one)
+
     > journald_api:close(Journal).                    				// close the journal and the notifier (if used)
 
 
 The upper example consists of all currently implemented methods. 
 
 There can be just one notifier per Journal instance. The notifier itself is no part of the C-API but uses the sd_journal_wait() function.
+The notifier will close itself when the receiving Erlang process is not available.
 
 Moving the head against borders (e.g. start and end of the journal or an entry) won't result in a crash, the atom 'eaddrnotavail' will be returned instead. 
 But be careful with the following:
