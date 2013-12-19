@@ -14,6 +14,10 @@ Installation using tetrapak
 --------------------------
 You can build the project by executing "tetrapak build". 
 
+Lager integration
+-----------------
+You can use [lager_journald_backend](https://github.com/travelping/lager_journald_backend) to send your Lager logs to systemd's journal.
+
 Usage
 -----
 
