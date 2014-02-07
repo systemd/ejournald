@@ -27,6 +27,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <systemd/sd-journal.h>
+#include <systemd/sd-id128.h>
 #include <alloca.h>
 #include <assert.h>
 #include <unistd.h>
@@ -63,13 +64,13 @@ void close_journal_container(journal_container* jc)
 
     //case notifier not used
     if(jc->notifier_used==0){
-		sd_journal_close(jc->journal_pointer);    
-	}
+        sd_journal_close(jc->journal_pointer);    
+    }
     else{
-    		//close the notifier thread
-    		jc->notifier_flag=1;
+            //close the notifier thread
+            jc->notifier_flag=1;
                 enif_thread_join(jc->tid, NULL);
-    		sd_journal_close(jc->journal_pointer);    
+            sd_journal_close(jc->journal_pointer);    
     }
 }
 
@@ -255,7 +256,7 @@ static ERL_NIF_TERM nif_close(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
   
     close_journal_container(jc);
 
-	return atom_ok;
+    return atom_ok;
 }
 
 
@@ -579,20 +580,20 @@ static void * notifier_run(void *arg){
     changes = sd_journal_wait(jc->journal_pointer, (uint64_t) 1000);
     while(1){
 
-		if( jc->notifier_flag == 1 ){
-			jc->notifier_flag = 0; 
-			enif_thread_exit(NULL);
-		}
+        if( jc->notifier_flag == 1 ){
+            jc->notifier_flag = 0; 
+            enif_thread_exit(NULL);
+        }
 
-    		//waits 1000 microseconds for a new journal entry
-        	changes = sd_journal_wait(jc->journal_pointer, (uint64_t) 1000);
-	   	if( changes != SD_JOURNAL_NOP ){
-        		t_env = enif_alloc_env();
-        		if(!enif_send(NULL, &(jc->pid), t_env, enif_make_atom(t_env, "journal_changed"))){
-            		    enif_thread_exit(NULL);
-            		    enif_clear_env(t_env);
-        		}
-		}
+        //waits 1000 microseconds for a new journal entry
+        changes = sd_journal_wait(jc->journal_pointer, (uint64_t) 1000);
+        if( changes != SD_JOURNAL_NOP ){
+            t_env = enif_alloc_env();
+            if(!enif_send(NULL, &(jc->pid), t_env, enif_make_atom(t_env, "journal_changed"))){
+                enif_thread_exit(NULL);
+                enif_clear_env(t_env);
+            }
+        }
     }
 
     return NULL;
@@ -633,7 +634,7 @@ static ERL_NIF_TERM nif_close_notifier (ErlNifEnv* env, int argc, const ERL_NIF_
 
     if(jc->notifier_used == 0)
         return enif_make_tuple2(env, atom_error, enif_make_string(env,"there is no notifier",ERL_NIF_LATIN1));
-	
+
     //setting the notifier flag will close the notifier thread
     jc->notifier_flag=1;
     jc->notifier_used=0;
@@ -641,6 +642,92 @@ static ERL_NIF_TERM nif_close_notifier (ErlNifEnv* env, int argc, const ERL_NIF_
     return atom_ok;
 }
 
+static ERL_NIF_TERM nif_get_realtime_usec (ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]){
+
+    journal_container *jc;
+    uint64_t usec;
+    int r;
+
+    if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
+        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+
+    r = sd_journal_get_realtime_usec(jc->journal_pointer, &usec);
+    if(r < 0 ) 
+        return enif_make_tuple2(env, atom_error, enif_make_string(env,"getting realtime failed",ERL_NIF_LATIN1));
+
+    return enif_make_tuple2(env, atom_ok, enif_make_uint64(env, usec)); 
+}
+
+static ERL_NIF_TERM nif_seek_realtime_usec (ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]){
+
+    journal_container *jc;
+    uint64_t usec;
+    int r;
+    
+    if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
+        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+    
+    if(!enif_get_uint64(env, argv[1], &usec))
+        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+
+    r = sd_journal_seek_realtime_usec(jc->journal_pointer, usec);
+    if(r < 0) 
+        return enif_make_tuple2(env, atom_error, enif_make_string(env,"seeking realtime failed",ERL_NIF_LATIN1));
+    
+    return atom_ok;
+}
+
+static ERL_NIF_TERM nif_get_monotonic_usec (ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]){
+
+    journal_container *jc;
+    uint64_t usec;
+    int r;
+    
+    if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
+        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+
+    sd_id128_t boot_id;
+
+    r = sd_journal_get_monotonic_usec(jc->journal_pointer, &usec, &boot_id);
+    if(r < 0) 
+        return enif_make_tuple2(env, atom_error, enif_make_string(env,"getting monotonic time failed",ERL_NIF_LATIN1));
+    
+    char boot_id_as_string[33];
+    sd_id128_to_string( boot_id, boot_id_as_string);
+
+    return enif_make_tuple3(env, atom_ok, enif_make_uint64(env, usec), enif_make_string(env, boot_id_as_string, ERL_NIF_LATIN1)); 
+}
+
+static ERL_NIF_TERM nif_seek_monotonic_usec (ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]){
+
+    journal_container *jc;
+    unsigned int ip;
+    uint64_t usec;
+    int r;
+    
+    if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
+        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+
+    if (!enif_get_list_length(env, argv[1], &ip))
+        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+    
+    char field[ip+1];
+    if (!enif_get_string(env, argv[1], field, ip, ERL_NIF_LATIN1))
+        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+    field[ip] = '\0';
+
+    if(!enif_get_uint64(env, argv[2], &usec))
+        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+
+    sd_id128_t boot_id;
+    sd_id128_from_string(field, &boot_id);
+
+    r = sd_journal_seek_monotonic_usec(jc->journal_pointer, boot_id, usec);
+    if(r < 0) 
+        return enif_make_tuple2(env, atom_error, enif_make_string(env,"seeking monotonic time failed",ERL_NIF_LATIN1));
+    
+    return atom_ok;
+}
 
 static ErlNifFunc nif_funcs[] =
 {    
@@ -670,7 +757,11 @@ static ErlNifFunc nif_funcs[] =
     {"enumerate_data", 1, nif_enumerate_data},
     {"restart_data", 1, nif_restart_data},
     {"open_notifier", 2, nif_open_notifier},
-    {"close_notifier", 1, nif_close_notifier}
+    {"close_notifier", 1, nif_close_notifier},
+    {"get_realtime_usec", 1, nif_get_realtime_usec},
+    {"seek_realtime_usec", 2, nif_seek_realtime_usec},
+    {"get_monotonic_usec", 1, nif_get_monotonic_usec},
+    {"seek_monotonic_usec", 3, nif_seek_monotonic_usec}    
 };
 
 ERL_NIF_INIT(journald_api,nif_funcs,load,NULL,NULL,NULL)
