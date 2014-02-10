@@ -1,7 +1,7 @@
 ejournald
 =========
 
-Ejournald is a journal binding for Erlang. At the moment it provides advanced write and read support for systemd's journal.
+Ejournald is a journal binding for Erlang. It provides advanced write and read support for systemd's journal.
 
 Installation
 ------------
@@ -41,7 +41,7 @@ Example for stream_fd/3 and write_fd/2:
     Fd = journald_api:stream_fd("id",5,0).
     journald_api:write_fd(Fd, "notice\n").
 
-will produve the following message in the journal:
+will produce the following message in the journal:
         
     PRIORITY=5
     SYSLOG_IDENTIFIER=id
@@ -49,57 +49,58 @@ will produve the following message in the journal:
 
 Reading from the journal: The following command sequence describes a typical workflow. 
 
-    > {ok, Journal} = journald_api:open().                            // opens ALL local available journals
-    > {ok, JournalDir} = journald_api:open_directory(<Path>).    	// open all journals in specific directory
+    > {ok, Journal} = journald_api:open().
+    > {ok, JournalDir} = journald_api:open_directory(<Path>).
 
-    > journald_api:next(Journal).                        			//After the open command the head needs to be moved
+    > journald_api:next(Journal).
     > journald_api:get_data(Journal, "MESSAGE").        
-    {ok,"MESSAGE= first message"}                     				// first entry of my journal
+    {ok,"MESSAGE= first message"}               
 
-    > journald_api:seek_tail(Journal).                     			// always get the last entry
-    > journald_api:previous(Journal).                          		// after setting properties you always need to move the cursor (next, previous)
+    > journald_api:seek_tail(Journal).         
+    > journald_api:previous(Journal).         
     > journald_api:get_data(Journal, "MESSAGE").
     {ok,"MESSAGE= another message"}
 
-    > journald_api:add_match(Journal, "PRIORITY=7").   			// just take entries with PRIORITY=7
-    > journald_api:previous(Journal).                      			// since the head is at the end of the journal he needs to search backwards
+    > journald_api:add_match(Journal, "PRIORITY=7").
+    > journald_api:previous(Journal). 
     > journald_api:get_data(Journal, "PRIORITY").
     {ok,"PRIORITY=7"}
 
-    > journald_api:add_disjunction(Journal).               			// the next add_match should be added as a disjunction (conjunction also available 
-    														// but not working with systemd 199)
-    > journald_api:add_match(Journal, "PRIORITY=5").   			// now all entries with PRIORITY=7 or PRIORITY=5 are considered
+    > journald_api:add_disjunction(Journal).	
+    // the next add_match should be added as a disjunction 
+    // (conjunction also available but not working with systemd 199)
+    
+    > journald_api:add_match(Journal, "PRIORITY=5"). 
 
-    > journald_api:flush_matches(Journal).                 			// get rid of the added matches
+    > journald_api:flush_matches(Journal).   
     > journald_api:next(Journal).
     > journald_api:get_data(Journal, "PRIORITY").
     {ok,"PRIORITY=3"}
 
     > journald_api:seek_head(Journal).                    
-    > journald_api:next().                            				// go to last available entry
+    > journald_api:next().                  
 
-    > {ok, Cursor} = journald_api:get_cursor(Journal).            	// store ID of the current entry in Cursor
-    > journald_api:test_cursor(Journal, Cursor).    				// test if entries have same ID
+    > {ok, Cursor} = journald_api:get_cursor(Journal).
+    > journald_api:test_cursor(Journal, Cursor).    
     > journald_api:seek_cursor(Journal, Cursor).
-    > journald_api:next(Journal).                                	// move to the Cursor
+    > journald_api:next(Journal).                  
 
-    > journald_api:enumerate_data(Journal).						// iterate through current entry fields
-    > journald_api:restart_data(Journal).						// restart enumeration from the start index
+    > journald_api:enumerate_data(Journal).		
+    > journald_api:restart_data(Journal).	
 
-    > journald_api:open_notifier(Journal, self()).				// you can open a notifier, that sends the atom 'journal_changed' to a given PID
-    > journald_api:sendv([{"MESSAGE", test}]).					// if something changed in the journal, e.g. a new entry arrived
+    > journald_api:open_notifier(Journal, self()).
+    > journald_api:sendv([{"MESSAGE", test}]).	
     > flush().
-    Shell got journal_changed
+    Shell got journal_append
 
-    > journald_api:close_notifier(Journal).						// close the notifier (so you could start a new one)
+    > journald_api:close_notifier(Journal).	
 
-    > journald_api:close(Journal).                    				// close the journal and the notifier (if used)
+    > journald_api:close(Journal).         
 
-
-The upper example consists of all currently implemented methods. 
 
 There can be just one notifier per Journal instance. The notifier itself is no part of the C-API but uses the sd_journal_wait() function.
 The notifier will close itself when the receiving Erlang process is not available.
+Note that the notifier distinguishes between added journal entries and added/deleted journal files. It returns 'journal_append' or 'journal_invalidate'.
 
 Moving the head against borders (e.g. start and end of the journal or an entry) won't result in a crash, the atom 'eaddrnotavail' will be returned instead. 
 But be careful with the following:

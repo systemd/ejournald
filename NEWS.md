@@ -3,6 +3,12 @@ ejournald
 
 Ejournald is a journald binding for Erlang.
 
+Version 1.3.0 - 7 Feb 2014
+---------------------------
+
+* added functionalities to get realtime and monotonic timestamps with boot IDs which can be used to seek entries
+* the notifier is now able to distinguish between notifications about added journal entries and added/deleted journal files
+
 Version 1.2.0 - 18 Dec 2013
 ---------------------------
 

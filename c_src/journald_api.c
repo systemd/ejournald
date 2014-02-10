@@ -587,9 +587,19 @@ static void * notifier_run(void *arg){
 
         //waits 1000 microseconds for a new journal entry
         changes = sd_journal_wait(jc->journal_pointer, (uint64_t) 1000);
-        if( changes != SD_JOURNAL_NOP ){
+
+        //new entry appended at the end of the journal
+        if( changes == SD_JOURNAL_APPEND ){
             t_env = enif_alloc_env();
-            if(!enif_send(NULL, &(jc->pid), t_env, enif_make_atom(t_env, "journal_changed"))){
+            if(!enif_send(NULL, &(jc->pid), t_env, enif_make_atom(t_env, "journal_append"))){
+                enif_thread_exit(NULL);
+                enif_clear_env(t_env);
+            }
+        }
+        //journal files were added or removed
+        else if( changes == SD_JOURNAL_INVALIDATE ){
+            t_env = enif_alloc_env();
+            if(!enif_send(NULL, &(jc->pid), t_env, enif_make_atom(t_env, "journal_invalidate"))){
                 enif_thread_exit(NULL);
                 enif_clear_env(t_env);
             }
