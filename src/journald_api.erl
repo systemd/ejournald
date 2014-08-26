@@ -37,6 +37,12 @@
 -type value() :: number() | atom() | iolist().
 -spec sendv([{iolist(),value()}]) -> any().
 
+-define(nif_stub,nif_stub_error(?LINE)).
+nif_stub_error(Line) ->
+    erlang:nif_error({nif_not_loaded,module,?MODULE,line,Line}).
+
+%% ----------------------------------------------------------------------------------
+%% -- low level journald API
 sendv(Args) ->
     error_wrapper( fun sendv_nif/1, [list_conversion(Args)] ).
 
@@ -121,60 +127,33 @@ seek_realtime_usec(Fd, Usec) ->
 
 %% ----------------------------------------------------
 %% --  NIF dummies
-sendv_nif(_Args) ->
-    "NIF library not loaded".
-stream_fd_nif(_A, _B, _C) -> 
-    "NIF library not loaded".
-write_fd_nif(_Fd, _Msg) ->
-    "NIF library not loaded".
-close_fd_nif(_Fd) ->
-    "NIF library not loaded".
-open_nif() ->
-    "NIF library not loaded".
-open_directory_nif(_Arg) ->
-    "NIF library not loaded".
-close_nif(_Arg) ->    
-    "NIF library not loaded".
-next_nif(_Arg) ->
-    "NIF library not loaded".
-previous_nif(_Arg) -> 
-    "NIF library not loaded".
-get_data_nif(_Arg1, _Arg2) -> 
-     "NIF library not loaded".
-add_match_nif(_Arg1, _Arg2) -> 
-     "NIF library not loaded".
-add_disjunction_nif(_Arg) -> 
-     "NIF library not loaded".
-flush_matches_nif(_Arg) -> 
-     "NIF library not loaded".
-seek_head_nif(_Arg) -> 
-     "NIF library not loaded".
-seek_tail_nif(_Arg) -> 
-   "NIF library not loaded".
-get_cursor_nif(_Arg) ->
-    "NIF library not loaded".
-test_cursor_nif(_Arg1, _Arg2) ->
-    "NIF library not loaded".
-seek_cursor_nif(_Arg1, _Arg2) ->
-    "NIF library not loaded".
-query_unique_nif(_Arg1, _Arg2) ->
-    "NIF library not loaded".
-enumerate_unique_nif(_Arg) ->
-    "NIF library not loaded".
-restart_unique_nif(_Arg) ->
-    "NIF library not loaded".
-open_notifier_nif(_Arg1, _Arg2) ->
-    "NIF library not loaded".
-enumerate_data_nif(_Arg) ->
-    "NIF library not loaded".
-restart_data_nif(_Arg) ->
-    "NIF library not loaded".
-close_notifier_nif(_Arg) ->
-    "NIF library not loaded".
-get_realtime_usec_nif(_Journal) ->
-    "NIF library not loaded".
-seek_realtime_usec_nif(_Journal, _Usec) ->
-    "NIF library not loaded".
+sendv_nif(_Args) -> ?nif_stub.
+stream_fd_nif(_A, _B, _C) -> ?nif_stub.
+write_fd_nif(_Fd, _Msg) -> ?nif_stub.
+close_fd_nif(_Fd) -> ?nif_stub.
+open_nif() -> ?nif_stub.
+open_directory_nif(_Arg) -> ?nif_stub.
+close_nif(_Arg) -> ?nif_stub.    
+next_nif(_Arg) -> ?nif_stub.
+previous_nif(_Arg) -> ?nif_stub. 
+get_data_nif(_Arg1, _Arg2) -> ?nif_stub. 
+add_match_nif(_Arg1, _Arg2) -> ?nif_stub. 
+add_disjunction_nif(_Arg) -> ?nif_stub. 
+flush_matches_nif(_Arg) -> ?nif_stub. 
+seek_head_nif(_Arg) -> ?nif_stub. 
+seek_tail_nif(_Arg) -> ?nif_stub. 
+get_cursor_nif(_Arg) -> ?nif_stub.
+test_cursor_nif(_Arg1, _Arg2) -> ?nif_stub.
+seek_cursor_nif(_Arg1, _Arg2) -> ?nif_stub.
+query_unique_nif(_Arg1, _Arg2) -> ?nif_stub.
+enumerate_unique_nif(_Arg) -> ?nif_stub.
+restart_unique_nif(_Arg) -> ?nif_stub.
+open_notifier_nif(_Arg1, _Arg2) -> ?nif_stub.
+enumerate_data_nif(_Arg) -> ?nif_stub.
+restart_data_nif(_Arg) -> ?nif_stub.
+close_notifier_nif(_Arg) -> ?nif_stub.
+get_realtime_usec_nif(_Journal) -> ?nif_stub.
+seek_realtime_usec_nif(_Journal, _Usec) -> ?nif_stub.
 
 
 %% -----------------------------------------------------------------
@@ -182,7 +161,7 @@ seek_realtime_usec_nif(_Journal, _Usec) ->
 error_wrapper(Fun, Args) ->
     case erlang:apply(Fun, Args) of
         badarg ->
-            erlang:error(badarg);
+            erlang:error(badarg, Args);
         Result ->
             Result
     end.
