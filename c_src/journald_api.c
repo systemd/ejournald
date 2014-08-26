@@ -51,7 +51,6 @@ typedef struct {
 //Some standard return values
 static ERL_NIF_TERM atom_ok;
 static ERL_NIF_TERM atom_error;
-static ERL_NIF_TERM atom_badarg;
 static ERL_NIF_TERM atom_eaddrnotavail;
 
 static ERL_NIF_TERM return_error(ErlNifEnv* env, const char* reason)
@@ -98,7 +97,6 @@ static int load(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info)
  
     atom_ok = enif_make_atom(env, "ok");
     atom_error = enif_make_atom(env, "error");
-    atom_badarg = enif_make_atom(env, "badarg");
     atom_eaddrnotavail = enif_make_atom(env, "eaddrnotavail");
 
     return 0;
@@ -116,7 +114,7 @@ static ERL_NIF_TERM nif_sendv(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
         
     if (!enif_get_list_cell(env, argv[0], &buffer, &tail) 
         || !enif_get_list_length(env, argv[0], &len) || len==0)
-            return atom_badarg;
+            return enif_make_badarg(env);
 
     iov = alloca(len * sizeof(struct iovec));
     do {
@@ -151,13 +149,13 @@ static ERL_NIF_TERM nif_stream_fd(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
     if (!enif_get_list_length(env,argv[0],&len)
         || !enif_get_int(env, argv[1], &priority) 
         || !enif_get_int(env, argv[2], &level_prefix))  // binary conversion 
-        return atom_badarg;
+        return enif_make_badarg(env);
 
     len++;
     syslog_id = alloca(len);
         
     if(!enif_get_string(env, argv[0], syslog_id, len, ERL_NIF_LATIN1))
-        return atom_badarg;
+        return enif_make_badarg(env);
         
     *fd = sd_journal_stream_fd(syslog_id, priority, level_prefix);
     if (*fd < 0)
@@ -175,9 +173,9 @@ static ERL_NIF_TERM nif_write_fd(ErlNifEnv* env, int argc, const ERL_NIF_TERM ar
     ErlNifBinary msg;
     
     if(!enif_get_resource(env, argv[0], file_descriptor, (void**) &fd))
-        return atom_badarg;
+        return enif_make_badarg(env);
     if(!enif_inspect_iolist_as_binary(env, argv[1], &msg))
-        return atom_badarg;
+        return enif_make_badarg(env);
     
     if(write(*fd, msg.data, msg.size) < 0)
         return atom_error;
@@ -190,7 +188,7 @@ static ERL_NIF_TERM nif_close_fd(ErlNifEnv* env, int argc, const ERL_NIF_TERM ar
     int *fd;
 
     if(!enif_get_resource(env, argv[0], file_descriptor, (void**) &fd))
-        return atom_badarg;
+        return enif_make_badarg(env);
     if(close(*fd) < 0)
         return atom_error;
     
@@ -227,12 +225,12 @@ static ERL_NIF_TERM nif_open_directory(ErlNifEnv* env, int argc, const ERL_NIF_T
     unsigned int ip;
 
     if (!enif_get_list_length(env, argv[0], &ip))
-        return atom_badarg;
+        return enif_make_badarg(env);
     ip++; //string array is larger by one entry
 
     char field[ip];
     if (!enif_get_string(env, argv[0], field, ip, ERL_NIF_LATIN1))
-        return atom_badarg;
+        return enif_make_badarg(env);
 
     jc = enif_alloc_resource(journal_container_type, sizeof(journal_container));
     
@@ -259,7 +257,7 @@ static ERL_NIF_TERM nif_close(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
     journal_container *jc;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return atom_badarg;
+        return enif_make_badarg(env);
   
     close_journal_container(jc);
 
@@ -276,7 +274,7 @@ static ERL_NIF_TERM nif_next(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
     journal_container *jc;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return atom_badarg;
+        return enif_make_badarg(env);
         
     int r = sd_journal_next(jc->journal_pointer);    
     if (r < 0) 
@@ -292,7 +290,7 @@ static ERL_NIF_TERM nif_previous(ErlNifEnv* env, int argc, const ERL_NIF_TERM ar
     journal_container *jc;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return atom_badarg;
+        return enif_make_badarg(env);
         
     int r = sd_journal_previous(jc->journal_pointer);
     if (r < 0) 
@@ -314,15 +312,15 @@ static ERL_NIF_TERM nif_get_data(ErlNifEnv* env, int argc, const ERL_NIF_TERM ar
     unsigned int ip;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return atom_badarg;
+        return enif_make_badarg(env);
 
     if (!enif_get_list_length(env, argv[1], &ip))
-        return atom_badarg;
+        return enif_make_badarg(env);
     ip++; //string array is larger by one entry
 
     char field[ip];
     if (!enif_get_string(env, argv[1], field, ip, ERL_NIF_LATIN1))
-        return atom_badarg;
+        return enif_make_badarg(env);
 
     int r;
     char *d;
@@ -346,15 +344,15 @@ static ERL_NIF_TERM nif_add_match(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
     unsigned int ip;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return atom_badarg;
+        return enif_make_badarg(env);
 
     if (!enif_get_list_length(env, argv[1], &ip))
-        return atom_badarg;
+        return enif_make_badarg(env);
     ip++; //string array is larger by one entry
     
     char field[ip];
     if (!enif_get_string(env, argv[1], field, ip, ERL_NIF_LATIN1))
-        return atom_badarg;
+        return enif_make_badarg(env);
 
     int r = sd_journal_add_match(jc->journal_pointer, (void *) field, 0);
     if (r < 0)
@@ -368,7 +366,7 @@ static ERL_NIF_TERM nif_flush_matches(ErlNifEnv* env, int argc, const ERL_NIF_TE
     journal_container *jc;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return atom_badarg;
+        return enif_make_badarg(env);
         
     sd_journal_flush_matches(jc->journal_pointer);
     
@@ -381,7 +379,7 @@ static ERL_NIF_TERM nif_add_disjunction(ErlNifEnv* env, int argc, const ERL_NIF_
     journal_container *jc;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return atom_badarg;
+        return enif_make_badarg(env);
         
     int r = sd_journal_add_disjunction(jc->journal_pointer);
     if (r < 0)
@@ -395,7 +393,7 @@ static ERL_NIF_TERM nif_add_disjunction(ErlNifEnv* env, int argc, const ERL_NIF_
 //    journal_container *jc;
 //
 //    if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-//        return atom_badarg;
+//        return enif_make_badarg(env);
 //        
 //    int r = sd_journal_add_conjunction(jc->journal_pointer);    
 //    if (r < 0)
@@ -409,7 +407,7 @@ static ERL_NIF_TERM nif_seek_head(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
     journal_container *jc;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return atom_badarg;
+        return enif_make_badarg(env);
         
     int r = sd_journal_seek_head(jc->journal_pointer);    
     if (r < 0)
@@ -423,7 +421,7 @@ static ERL_NIF_TERM nif_seek_tail(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
     journal_container *jc;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return atom_badarg;
+        return enif_make_badarg(env);
         
     int r = sd_journal_seek_tail(jc->journal_pointer);    
     if (r < 0)
@@ -437,7 +435,7 @@ static ERL_NIF_TERM nif_get_cursor(ErlNifEnv* env, int argc, const ERL_NIF_TERM 
     journal_container *jc;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return atom_badarg;
+        return enif_make_badarg(env);
         
     char *cursor;
     int r = sd_journal_get_cursor(jc->journal_pointer, &cursor);    
@@ -458,15 +456,15 @@ static ERL_NIF_TERM nif_test_cursor(ErlNifEnv* env, int argc, const ERL_NIF_TERM
     unsigned int ip;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return atom_badarg;
+        return enif_make_badarg(env);
 
     if (!enif_get_list_length(env, argv[1], &ip))
-        return atom_badarg;
+        return enif_make_badarg(env);
     ip++; //string array is larger by one entry
     
     char field[ip];
     if (!enif_get_string(env, argv[1], field, ip, ERL_NIF_LATIN1))
-        return atom_badarg;
+        return enif_make_badarg(env);
 
     int r = sd_journal_test_cursor(jc->journal_pointer, field);
     if (r < 0) 
@@ -482,15 +480,15 @@ static ERL_NIF_TERM nif_seek_cursor(ErlNifEnv* env, int argc, const ERL_NIF_TERM
     unsigned int ip;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return atom_badarg;
+        return enif_make_badarg(env);
 
     if (!enif_get_list_length(env, argv[1], &ip))
-        return atom_badarg;
+        return enif_make_badarg(env);
     ip++; //string array is larger by one entry
     
     char field[ip];
     if (!enif_get_string(env, argv[1], field, ip, ERL_NIF_LATIN1))
-        return atom_badarg;
+        return enif_make_badarg(env);
 
     int r = sd_journal_seek_cursor(jc->journal_pointer, field);
     if (r < 0)
@@ -505,15 +503,15 @@ static ERL_NIF_TERM nif_query_unique(ErlNifEnv* env, int argc, const ERL_NIF_TER
     unsigned int ip;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return atom_badarg;
+        return enif_make_badarg(env);
 
     if (!enif_get_list_length(env, argv[1], &ip))
-        return atom_badarg;
+        return enif_make_badarg(env);
     ip++; //string array is larger by one entry
     
     char field[ip];
     if (!enif_get_string(env, argv[1], field, ip, ERL_NIF_LATIN1))
-        return atom_badarg;
+        return enif_make_badarg(env);
 
     int r = sd_journal_query_unique(jc->journal_pointer, field);
     if (r < 0)
@@ -527,7 +525,7 @@ static ERL_NIF_TERM nif_enumerate_unique(ErlNifEnv* env, int argc, const ERL_NIF
     journal_container *jc;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return atom_badarg;
+        return enif_make_badarg(env);
 
     int r;
     char *d;
@@ -547,7 +545,7 @@ static ERL_NIF_TERM nif_restart_unique(ErlNifEnv* env, int argc, const ERL_NIF_T
     journal_container *jc;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return atom_badarg;
+        return enif_make_badarg(env);
         
     sd_journal_restart_unique(jc->journal_pointer);    
 
@@ -559,7 +557,7 @@ static ERL_NIF_TERM nif_enumerate_data(ErlNifEnv* env, int argc, const ERL_NIF_T
     journal_container *jc;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return atom_badarg;
+        return enif_make_badarg(env);
 
     int r;
     char *d;
@@ -581,7 +579,7 @@ static ERL_NIF_TERM nif_restart_data(ErlNifEnv* env, int argc, const ERL_NIF_TER
     journal_container *jc;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return atom_badarg;
+        return enif_make_badarg(env);
         
     sd_journal_restart_data(jc->journal_pointer);    
 
@@ -630,7 +628,7 @@ static ERL_NIF_TERM nif_open_notifier (ErlNifEnv* env, int argc, const ERL_NIF_T
 
     journal_container *jc;
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return atom_badarg;
+        return enif_make_badarg(env);
 
     if(jc->notifier_used == 1)
         return return_error(env, "notifier_already_exists");
@@ -640,7 +638,7 @@ static ERL_NIF_TERM nif_open_notifier (ErlNifEnv* env, int argc, const ERL_NIF_T
 
     ErlNifPid pid;
     if(!enif_get_local_pid(env, argv[1], &pid))
-        return atom_badarg;
+        return enif_make_badarg(env);
 
     jc->pid = pid;
     jc->notifier_flag = 0;
@@ -657,7 +655,7 @@ static ERL_NIF_TERM nif_close_notifier (ErlNifEnv* env, int argc, const ERL_NIF_
 
     journal_container *jc;
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return atom_badarg;
+        return enif_make_badarg(env);
 
     if(jc->notifier_used == 0)
         return return_error(env, "no_notifier_available");
@@ -676,7 +674,7 @@ static ERL_NIF_TERM nif_get_realtime_usec (ErlNifEnv *env, int argc, const ERL_N
     int r;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return atom_badarg;
+        return enif_make_badarg(env);
 
     r = sd_journal_get_realtime_usec(jc->journal_pointer, &usec);
     if(r < 0 ) 
@@ -692,10 +690,10 @@ static ERL_NIF_TERM nif_seek_realtime_usec (ErlNifEnv *env, int argc, const ERL_
     int r;
     
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return atom_badarg;
+        return enif_make_badarg(env);
     
     if(!enif_get_uint64(env, argv[1], &usec))
-        return atom_badarg;
+        return enif_make_badarg(env);
 
     r = sd_journal_seek_realtime_usec(jc->journal_pointer, usec);
     if(r < 0) 
