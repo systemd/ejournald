@@ -442,7 +442,8 @@ static ERL_NIF_TERM nif_get_cursor(ErlNifEnv* env, int argc, const ERL_NIF_TERM 
     if (r < 0)
         return return_error(env, "failed_to_get_cursor");
 
-    ERL_NIF_TERM term = enif_make_string(env, cursor , ERL_NIF_LATIN1);
+    ERL_NIF_TERM term;
+    memcpy(enif_make_new_binary(env, strlen(cursor), &term), cursor, strlen(cursor));
 
     //cursor got allocated in sd_journal_get_cursor
     free(cursor);
@@ -453,20 +454,15 @@ static ERL_NIF_TERM nif_get_cursor(ErlNifEnv* env, int argc, const ERL_NIF_TERM 
 static ERL_NIF_TERM nif_test_cursor(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 
     journal_container *jc;
-    unsigned int ip;
+    ErlNifBinary p;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
         return enif_make_badarg(env);
 
-    if (!enif_get_list_length(env, argv[1], &ip))
-        return enif_make_badarg(env);
-    ip++; //string array is larger by one entry
-    
-    char field[ip];
-    if (!enif_get_string(env, argv[1], field, ip, ERL_NIF_LATIN1))
+    if (!enif_inspect_binary(env, argv[1], &p))
         return enif_make_badarg(env);
 
-    int r = sd_journal_test_cursor(jc->journal_pointer, field);
+    int r = sd_journal_test_cursor(jc->journal_pointer, (const char *) p.data);
     if (r < 0) 
         return return_error(env, "failed_to_test_cursor");
     else if (r == 0) 
@@ -477,20 +473,15 @@ static ERL_NIF_TERM nif_test_cursor(ErlNifEnv* env, int argc, const ERL_NIF_TERM
 static ERL_NIF_TERM nif_seek_cursor(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 
     journal_container *jc;
-    unsigned int ip;
+    ErlNifBinary p;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
         return enif_make_badarg(env);
 
-    if (!enif_get_list_length(env, argv[1], &ip))
-        return enif_make_badarg(env);
-    ip++; //string array is larger by one entry
-    
-    char field[ip];
-    if (!enif_get_string(env, argv[1], field, ip, ERL_NIF_LATIN1))
+    if (!enif_inspect_binary(env, argv[1], &p))
         return enif_make_badarg(env);
 
-    int r = sd_journal_seek_cursor(jc->journal_pointer, field);
+    int r = sd_journal_seek_cursor(jc->journal_pointer, (const char *) p.data);
     if (r < 0)
         return return_error(env, "failed_to_seek_cursor");
 
