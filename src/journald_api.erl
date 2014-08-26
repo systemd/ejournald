@@ -25,112 +25,168 @@
 %% External API
 -export([sendv/1, stream_fd/3, write_fd/2, close_fd/1,
         open/0, open_directory/1, close/1, next/1, 
-        previous/1, get_data/2,    add_match/2, add_conjunction/1, 
+        previous/1, get_data/2, add_match/2,  
         add_disjunction/1, flush_matches/1, seek_head/1, seek_tail/1,  
         get_cursor/1, test_cursor/2, seek_cursor/2, query_unique/2,
         enumerate_unique/1, restart_unique/1, open_notifier/2,
         enumerate_data/1, restart_data/1, close_notifier/1,
-        get_realtime_usec/1, get_monotonic_usec/1,
-        seek_realtime_usec/2, seek_monotonic_usec/3]).
+        get_realtime_usec/1, seek_realtime_usec/2]).
 
 -on_load(load_nif/0).
 
 -type value() :: number() | atom() | iolist().
 -spec sendv([{iolist(),value()}]) -> any().
- 
+
 sendv(Args) ->
-    sendv_nif(list_conversion(Args)).
+    error_wrapper( fun sendv_nif/1, [list_conversion(Args)] ).
 
-sendv_nif(_Args) ->
-    "NIF library not loaded".
+stream_fd(Id, Prio, LvlPrefix) -> 
+    error_wrapper( fun stream_fd_nif/3, [Id, Prio, LvlPrefix] ).
 
-stream_fd(_A, _B, _C) -> 
-    "NIF library not loaded".
+write_fd(Fd, Msg) ->
+    error_wrapper( fun write_fd_nif/2, [Fd, Msg] ).
 
-write_fd(_Fd, _Msg) ->
-    "NIF library not loaded".
-
-close_fd(_Fd) ->
-    "NIF library not loaded".
+close_fd(Fd) ->
+    error_wrapper( fun close_fd_nif/1, [Fd] ).
 
 open() ->
+    error_wrapper( fun open_nif/0, [] ).
+
+open_directory(Dir) ->
+    error_wrapper( fun open_directory_nif/1, [Dir] ).
+
+close(Fd) ->    
+    error_wrapper( fun close_nif/1, [Fd] ).
+
+next(Fd) ->
+    error_wrapper( fun next_nif/1, [Fd] ).
+
+previous(Fd) -> 
+    error_wrapper( fun previous_nif/1, [Fd] ).
+
+get_data(Fd, Field) -> 
+    error_wrapper( fun get_data_nif/2, [Fd, Field] ).
+
+add_match(Fd, Field) -> 
+    error_wrapper( fun add_match_nif/2, [Fd, Field] ).
+
+add_disjunction(Fd) -> 
+    error_wrapper( fun add_disjunction_nif/1, [Fd] ).
+
+flush_matches(Fd) -> 
+    error_wrapper( fun flush_matches_nif/1, [Fd] ).
+
+seek_head(Fd) -> 
+    error_wrapper( fun seek_head_nif/1, [Fd] ).
+
+seek_tail(Fd) -> 
+    error_wrapper( fun seek_tail_nif/1, [Fd] ).
+
+get_cursor(Fd) ->
+    error_wrapper( fun get_cursor_nif/1, [Fd] ).
+
+test_cursor(Fd, Cursor) ->
+    error_wrapper( fun test_cursor_nif/2, [Fd, Cursor] ).
+
+seek_cursor(Fd, Cursor) ->
+    error_wrapper( fun seek_cursor_nif/2, [Fd, Cursor] ).
+
+query_unique(Fd, Field) ->
+    error_wrapper( fun query_unique_nif/2, [Fd, Field] ).
+
+enumerate_unique(Fd) ->
+    error_wrapper( fun enumerate_unique_nif/1, [Fd] ).
+
+restart_unique(Fd) ->
+    error_wrapper( fun restart_unique_nif/1, [Fd] ).
+
+open_notifier(Fd, Pid) ->
+    error_wrapper( fun open_notifier_nif/2, [Fd, Pid] ).
+
+enumerate_data(Fd) ->
+    error_wrapper( fun enumerate_data_nif/1, [Fd] ).
+
+restart_data(Fd) ->
+    error_wrapper( fun restart_data_nif/1, [Fd] ).
+
+close_notifier(Fd) ->
+    error_wrapper( fun close_notifier_nif/1, [Fd] ).
+
+get_realtime_usec(Fd) ->
+    error_wrapper( fun get_realtime_usec_nif/1, [Fd] ).
+
+seek_realtime_usec(Fd, Usec) ->
+    error_wrapper( fun seek_realtime_usec_nif/2, [Fd, Usec] ).
+
+
+%% ----------------------------------------------------
+%% --  NIF dummies
+sendv_nif(_Args) ->
     "NIF library not loaded".
-
-open_directory(_Arg) ->
+stream_fd_nif(_A, _B, _C) -> 
     "NIF library not loaded".
-
-close(_Arg) ->    
+write_fd_nif(_Fd, _Msg) ->
     "NIF library not loaded".
-
-next(_Arg) ->
+close_fd_nif(_Fd) ->
     "NIF library not loaded".
-
-previous(_Arg) -> 
+open_nif() ->
     "NIF library not loaded".
-
-get_data(_Arg1, _Arg2) -> 
+open_directory_nif(_Arg) ->
+    "NIF library not loaded".
+close_nif(_Arg) ->    
+    "NIF library not loaded".
+next_nif(_Arg) ->
+    "NIF library not loaded".
+previous_nif(_Arg) -> 
+    "NIF library not loaded".
+get_data_nif(_Arg1, _Arg2) -> 
      "NIF library not loaded".
-
-add_match(_Arg1, _Arg2) -> 
+add_match_nif(_Arg1, _Arg2) -> 
      "NIF library not loaded".
-
-add_disjunction(_Arg) -> 
+add_disjunction_nif(_Arg) -> 
      "NIF library not loaded".
-
-add_conjunction(_Arg) -> 
+flush_matches_nif(_Arg) -> 
      "NIF library not loaded".
-
-flush_matches(_Arg) -> 
+seek_head_nif(_Arg) -> 
      "NIF library not loaded".
-
-seek_head(_Arg) -> 
-     "NIF library not loaded".
-
-seek_tail(_Arg) -> 
+seek_tail_nif(_Arg) -> 
    "NIF library not loaded".
-
-get_cursor(_Arg) ->
+get_cursor_nif(_Arg) ->
+    "NIF library not loaded".
+test_cursor_nif(_Arg1, _Arg2) ->
+    "NIF library not loaded".
+seek_cursor_nif(_Arg1, _Arg2) ->
+    "NIF library not loaded".
+query_unique_nif(_Arg1, _Arg2) ->
+    "NIF library not loaded".
+enumerate_unique_nif(_Arg) ->
+    "NIF library not loaded".
+restart_unique_nif(_Arg) ->
+    "NIF library not loaded".
+open_notifier_nif(_Arg1, _Arg2) ->
+    "NIF library not loaded".
+enumerate_data_nif(_Arg) ->
+    "NIF library not loaded".
+restart_data_nif(_Arg) ->
+    "NIF library not loaded".
+close_notifier_nif(_Arg) ->
+    "NIF library not loaded".
+get_realtime_usec_nif(_Journal) ->
+    "NIF library not loaded".
+seek_realtime_usec_nif(_Journal, _Usec) ->
     "NIF library not loaded".
 
-test_cursor(_Arg1, _Arg2) ->
-    "NIF library not loaded".
 
-seek_cursor(_Arg1, _Arg2) ->
-    "NIF library not loaded".
-
-query_unique(_Arg1, _Arg2) ->
-    "NIF library not loaded".
-
-enumerate_unique(_Arg) ->
-    "NIF library not loaded".
-
-restart_unique(_Arg) ->
-    "NIF library not loaded".
-
-open_notifier(_Arg1, _Arg2) ->
-    "NIF library not loaded".
-
-enumerate_data(_Arg) ->
-    "NIF library not loaded".
-
-restart_data(_Arg) ->
-    "NIF library not loaded".
-
-close_notifier(_Arg) ->
-    "NIF library not loaded".
-
-get_realtime_usec(_Journal) ->
-    "NIF library not loaded".
-
-seek_realtime_usec(_Journal, _Usec) ->
-    "NIF library not loaded".
-
-get_monotonic_usec(_Journal) ->
-    "NIF library not loaded".
-
-seek_monotonic_usec(_Args1, _Arg2, _Arg3) ->
-    "NIF library not loaded".
-
+%% -----------------------------------------------------------------
+%% -- helpers
+error_wrapper(Fun, Args) ->
+    case erlang:apply(Fun, Args) of
+        badarg ->
+            erlang:error(badarg);
+        Result ->
+            Result
+    end.
+ 
 list_conversion([])    -> [];
 list_conversion([{E,V}|T])  ->
     [[E, $=, to_list(V)] | list_conversion(T)]; 

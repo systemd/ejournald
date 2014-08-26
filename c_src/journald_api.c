@@ -51,7 +51,13 @@ typedef struct {
 //Some standard return values
 static ERL_NIF_TERM atom_ok;
 static ERL_NIF_TERM atom_error;
+static ERL_NIF_TERM atom_badarg;
 static ERL_NIF_TERM atom_eaddrnotavail;
+
+static ERL_NIF_TERM return_error(ErlNifEnv* env, const char* reason)
+{
+    return enif_make_tuple2(env, atom_error, enif_make_atom(env, reason));
+}
 
 void dtor_fd(ErlNifEnv* env, void* obj)
 {
@@ -92,6 +98,7 @@ static int load(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info)
  
     atom_ok = enif_make_atom(env, "ok");
     atom_error = enif_make_atom(env, "error");
+    atom_badarg = enif_make_atom(env, "badarg");
     atom_eaddrnotavail = enif_make_atom(env, "eaddrnotavail");
 
     return 0;
@@ -109,7 +116,7 @@ static ERL_NIF_TERM nif_sendv(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
         
     if (!enif_get_list_cell(env, argv[0], &buffer, &tail) 
         || !enif_get_list_length(env, argv[0], &len) || len==0)
-            return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1)); 
+            return atom_badarg;
 
     iov = alloca(len * sizeof(struct iovec));
     do {
@@ -144,13 +151,13 @@ static ERL_NIF_TERM nif_stream_fd(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
     if (!enif_get_list_length(env,argv[0],&len)
         || !enif_get_int(env, argv[1], &priority) 
         || !enif_get_int(env, argv[2], &level_prefix))  // binary conversion 
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1)); 
+        return atom_badarg;
 
     len++;
     syslog_id = alloca(len);
         
     if(!enif_get_string(env, argv[0], syslog_id, len, ERL_NIF_LATIN1))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1)); 
+        return atom_badarg;
         
     *fd = sd_journal_stream_fd(syslog_id, priority, level_prefix);
     if (*fd < 0)
@@ -168,9 +175,9 @@ static ERL_NIF_TERM nif_write_fd(ErlNifEnv* env, int argc, const ERL_NIF_TERM ar
     ErlNifBinary msg;
     
     if(!enif_get_resource(env, argv[0], file_descriptor, (void**) &fd))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1)); 
+        return atom_badarg;
     if(!enif_inspect_iolist_as_binary(env, argv[1], &msg))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1)); 
+        return atom_badarg;
     
     if(write(*fd, msg.data, msg.size) < 0)
         return atom_error;
@@ -183,7 +190,7 @@ static ERL_NIF_TERM nif_close_fd(ErlNifEnv* env, int argc, const ERL_NIF_TERM ar
     int *fd;
 
     if(!enif_get_resource(env, argv[0], file_descriptor, (void**) &fd))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1)); 
+        return atom_badarg;
     if(close(*fd) < 0)
         return atom_error;
     
@@ -203,7 +210,7 @@ static ERL_NIF_TERM nif_open(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
 
     int r = sd_journal_open(&(jc->journal_pointer), SD_JOURNAL_LOCAL_ONLY);
     if (r < 0) 
-        return enif_make_tuple2(env, atom_error, enif_make_string(env,"Failed to open journal",ERL_NIF_LATIN1));
+        return return_error(env, "failed_to_open_journal");
 
     jc->notifier_used=0;
     
@@ -220,18 +227,18 @@ static ERL_NIF_TERM nif_open_directory(ErlNifEnv* env, int argc, const ERL_NIF_T
     unsigned int ip;
 
     if (!enif_get_list_length(env, argv[0], &ip))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1)); 
+        return atom_badarg;
     ip++; //string array is larger by one entry
 
     char field[ip];
     if (!enif_get_string(env, argv[0], field, ip, ERL_NIF_LATIN1))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1)); 
+        return atom_badarg;
 
     jc = enif_alloc_resource(journal_container_type, sizeof(journal_container));
     
     int r = sd_journal_open_directory(&(jc->journal_pointer), field, 0);
     if (r < 0)
-        return enif_make_tuple2(env, atom_error, enif_make_string(env,"Failed to open journal",ERL_NIF_LATIN1));
+        return return_error(env, "failed_to_open_journal");
     
     jc->notifier_used=0;
 
@@ -252,7 +259,7 @@ static ERL_NIF_TERM nif_close(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
     journal_container *jc;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1)); 
+        return atom_badarg;
   
     close_journal_container(jc);
 
@@ -269,12 +276,15 @@ static ERL_NIF_TERM nif_next(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
     journal_container *jc;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1)); 
+        return atom_badarg;
         
     int r = sd_journal_next(jc->journal_pointer);    
-    if (r < 0) return enif_make_tuple2(env, atom_error, enif_make_string(env,"Failed to move forwards",ERL_NIF_LATIN1));
-    if (r == 0) return atom_eaddrnotavail;
-    else return atom_ok;
+    if (r < 0) 
+        return return_error(env, "failed_to_move_forwards");
+    if (r == 0) 
+        return atom_eaddrnotavail;
+    else 
+        return atom_ok;
 }
 
 static ERL_NIF_TERM nif_previous(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
@@ -282,12 +292,15 @@ static ERL_NIF_TERM nif_previous(ErlNifEnv* env, int argc, const ERL_NIF_TERM ar
     journal_container *jc;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1)); 
+        return atom_badarg;
         
     int r = sd_journal_previous(jc->journal_pointer);
-    if (r < 0) return enif_make_tuple2(env, atom_error, enif_make_string(env,"Failed to move backwards",ERL_NIF_LATIN1));
-    if (r == 0) return atom_eaddrnotavail;
-    else return atom_ok;
+    if (r < 0) 
+        return return_error(env, "failed_to_move_backwards");
+    if (r == 0) 
+        return atom_eaddrnotavail;
+    else 
+        return atom_ok;
 }
 
 /*
@@ -301,15 +314,15 @@ static ERL_NIF_TERM nif_get_data(ErlNifEnv* env, int argc, const ERL_NIF_TERM ar
     unsigned int ip;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1)); 
+        return atom_badarg;
 
     if (!enif_get_list_length(env, argv[1], &ip))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1)); 
+        return atom_badarg;
     ip++; //string array is larger by one entry
 
     char field[ip];
     if (!enif_get_string(env, argv[1], field, ip, ERL_NIF_LATIN1))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1)); 
+        return atom_badarg;
 
     int r;
     char *d;
@@ -317,7 +330,7 @@ static ERL_NIF_TERM nif_get_data(ErlNifEnv* env, int argc, const ERL_NIF_TERM ar
 
     r = sd_journal_get_data(jc->journal_pointer, field, (void *) &d, &l);
     if (r < 0)
-        return enif_make_tuple2(env, atom_error, enif_make_string(env,"Failed to get data",ERL_NIF_LATIN1));
+        return return_error(env, "failed_to_get_data");
 
     ERL_NIF_TERM term = enif_make_string_len(env, d , l, ERL_NIF_LATIN1);
     return enif_make_tuple2(env, atom_ok, term);
@@ -333,19 +346,19 @@ static ERL_NIF_TERM nif_add_match(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
     unsigned int ip;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1)); 
+        return atom_badarg;
 
     if (!enif_get_list_length(env, argv[1], &ip))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1)); 
+        return atom_badarg;
     ip++; //string array is larger by one entry
     
     char field[ip];
     if (!enif_get_string(env, argv[1], field, ip, ERL_NIF_LATIN1))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1)); 
+        return atom_badarg;
 
     int r = sd_journal_add_match(jc->journal_pointer, (void *) field, 0);
     if (r < 0)
-        return enif_make_tuple2(env, atom_error, enif_make_string(env,"Failed to add match",ERL_NIF_LATIN1));
+        return return_error(env, "failed_to_add_match");
 
     return atom_ok;
 }
@@ -355,7 +368,7 @@ static ERL_NIF_TERM nif_flush_matches(ErlNifEnv* env, int argc, const ERL_NIF_TE
     journal_container *jc;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1)); 
+        return atom_badarg;
         
     sd_journal_flush_matches(jc->journal_pointer);
     
@@ -368,11 +381,11 @@ static ERL_NIF_TERM nif_add_disjunction(ErlNifEnv* env, int argc, const ERL_NIF_
     journal_container *jc;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+        return atom_badarg;
         
     int r = sd_journal_add_disjunction(jc->journal_pointer);
     if (r < 0)
-        return enif_make_tuple2(env, atom_error, enif_make_string(env,"Failed to add disjunction",ERL_NIF_LATIN1));
+        return return_error(env, "failed_to_add_disjunction");
 
     return atom_ok;
 }
@@ -382,11 +395,11 @@ static ERL_NIF_TERM nif_add_disjunction(ErlNifEnv* env, int argc, const ERL_NIF_
 //    journal_container *jc;
 //
 //    if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-//        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+//        return atom_badarg;
 //        
 //    int r = sd_journal_add_conjunction(jc->journal_pointer);    
 //    if (r < 0)
-//        return enif_make_tuple2(env, atom_error, enif_make_string(env,"Failed to add conjunction",ERL_NIF_LATIN1));
+//        return return_error(env, "failed_to_add_conjunction");
 //
 //    return atom_ok;
 //}
@@ -396,11 +409,11 @@ static ERL_NIF_TERM nif_seek_head(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
     journal_container *jc;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+        return atom_badarg;
         
     int r = sd_journal_seek_head(jc->journal_pointer);    
     if (r < 0)
-        return enif_make_tuple2(env, atom_error, enif_make_string(env,"Failed to find head",ERL_NIF_LATIN1));
+        return return_error(env, "failed_to_find_head");
 
     return atom_ok;
 }
@@ -410,11 +423,11 @@ static ERL_NIF_TERM nif_seek_tail(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
     journal_container *jc;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+        return atom_badarg;
         
     int r = sd_journal_seek_tail(jc->journal_pointer);    
     if (r < 0)
-        return enif_make_tuple2(env, atom_error, enif_make_string(env,"Failed to find tail",ERL_NIF_LATIN1));
+        return return_error(env, "failed_to_find_tail");
 
     return atom_ok;
 }
@@ -424,12 +437,12 @@ static ERL_NIF_TERM nif_get_cursor(ErlNifEnv* env, int argc, const ERL_NIF_TERM 
     journal_container *jc;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+        return atom_badarg;
         
     char *cursor;
     int r = sd_journal_get_cursor(jc->journal_pointer, &cursor);    
     if (r < 0)
-        return enif_make_tuple2(env, atom_error, enif_make_string(env,"Failed to get cursor",ERL_NIF_LATIN1));
+        return return_error(env, "failed_to_get_cursor");
 
     ERL_NIF_TERM term = enif_make_string(env, cursor , ERL_NIF_LATIN1);
 
@@ -445,19 +458,21 @@ static ERL_NIF_TERM nif_test_cursor(ErlNifEnv* env, int argc, const ERL_NIF_TERM
     unsigned int ip;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+        return atom_badarg;
 
     if (!enif_get_list_length(env, argv[1], &ip))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+        return atom_badarg;
     ip++; //string array is larger by one entry
     
     char field[ip];
     if (!enif_get_string(env, argv[1], field, ip, ERL_NIF_LATIN1))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+        return atom_badarg;
 
     int r = sd_journal_test_cursor(jc->journal_pointer, field);
-    if (r < 0) return enif_make_tuple2(env, atom_error, enif_make_string(env,"Failed to test cursor",ERL_NIF_LATIN1));
-    else if (r == 0) return atom_eaddrnotavail;
+    if (r < 0) 
+        return return_error(env, "failed_to_test_cursor");
+    else if (r == 0) 
+        return atom_eaddrnotavail;
     else return atom_ok;
 }
 
@@ -467,19 +482,19 @@ static ERL_NIF_TERM nif_seek_cursor(ErlNifEnv* env, int argc, const ERL_NIF_TERM
     unsigned int ip;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+        return atom_badarg;
 
     if (!enif_get_list_length(env, argv[1], &ip))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+        return atom_badarg;
     ip++; //string array is larger by one entry
     
     char field[ip];
     if (!enif_get_string(env, argv[1], field, ip, ERL_NIF_LATIN1))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+        return atom_badarg;
 
     int r = sd_journal_seek_cursor(jc->journal_pointer, field);
     if (r < 0)
-        return enif_make_tuple2(env, atom_error, enif_make_string(env,"Failed to seek cursor",ERL_NIF_LATIN1));
+        return return_error(env, "failed_to_seek_cursor");
 
     return atom_ok;
 }
@@ -490,19 +505,19 @@ static ERL_NIF_TERM nif_query_unique(ErlNifEnv* env, int argc, const ERL_NIF_TER
     unsigned int ip;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+        return atom_badarg;
 
     if (!enif_get_list_length(env, argv[1], &ip))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+        return atom_badarg;
     ip++; //string array is larger by one entry
     
     char field[ip];
     if (!enif_get_string(env, argv[1], field, ip, ERL_NIF_LATIN1))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+        return atom_badarg;
 
     int r = sd_journal_query_unique(jc->journal_pointer, field);
     if (r < 0)
-        return enif_make_tuple2(env, atom_error, enif_make_string(env,"Failed to seek cursor",ERL_NIF_LATIN1));
+        return return_error(env, "failed_to_seek_cursor");
 
     return atom_ok;
 }
@@ -512,7 +527,7 @@ static ERL_NIF_TERM nif_enumerate_unique(ErlNifEnv* env, int argc, const ERL_NIF
     journal_container *jc;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+        return atom_badarg;
 
     int r;
     char *d;
@@ -532,7 +547,7 @@ static ERL_NIF_TERM nif_restart_unique(ErlNifEnv* env, int argc, const ERL_NIF_T
     journal_container *jc;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+        return atom_badarg;
         
     sd_journal_restart_unique(jc->journal_pointer);    
 
@@ -544,15 +559,17 @@ static ERL_NIF_TERM nif_enumerate_data(ErlNifEnv* env, int argc, const ERL_NIF_T
     journal_container *jc;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+        return atom_badarg;
 
     int r;
     char *d;
     size_t l;
 
     r = sd_journal_enumerate_data(jc->journal_pointer, (void *) &d, &l);
-    if( r < 0) return enif_make_tuple2(env, atom_error, enif_make_string(env,"enumerating failed",ERL_NIF_LATIN1));
-    else if (r == 0) return atom_eaddrnotavail;
+    if( r < 0) 
+        return return_error(env, "failed_to_enumerate");
+    else if (r == 0) 
+        return atom_eaddrnotavail;
  
     ERL_NIF_TERM term = enif_make_string_len(env, d , l, ERL_NIF_LATIN1);
 
@@ -564,7 +581,7 @@ static ERL_NIF_TERM nif_restart_data(ErlNifEnv* env, int argc, const ERL_NIF_TER
     journal_container *jc;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+        return atom_badarg;
         
     sd_journal_restart_data(jc->journal_pointer);    
 
@@ -613,23 +630,23 @@ static ERL_NIF_TERM nif_open_notifier (ErlNifEnv* env, int argc, const ERL_NIF_T
 
     journal_container *jc;
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+        return atom_badarg;
 
     if(jc->notifier_used == 1)
-       return enif_make_tuple2(env, atom_error, enif_make_string(env,"notifier already exists",ERL_NIF_LATIN1));
+        return return_error(env, "notifier_already_exists");
 
     if(jc->notifier_flag==1)
-       return enif_make_tuple2(env, atom_error, enif_make_string(env,"old notifier not closed yet",ERL_NIF_LATIN1));
+        return return_error(env, "old_notifier_not_closed_yet");
 
     ErlNifPid pid;
     if(!enif_get_local_pid(env, argv[1], &pid))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+        return atom_badarg;
 
     jc->pid = pid;
     jc->notifier_flag = 0;
         
     if(enif_thread_create("notifier_worker", &jc->tid, notifier_run, (void *) jc, NULL) != 0)
-        return enif_make_tuple2(env, atom_error, enif_make_string(env,"thread creation failed",ERL_NIF_LATIN1));
+        return return_error(env, "thread_creation_failed");
 
     jc->notifier_used = 1;
 
@@ -640,10 +657,10 @@ static ERL_NIF_TERM nif_close_notifier (ErlNifEnv* env, int argc, const ERL_NIF_
 
     journal_container *jc;
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+        return atom_badarg;
 
     if(jc->notifier_used == 0)
-        return enif_make_tuple2(env, atom_error, enif_make_string(env,"there is no notifier",ERL_NIF_LATIN1));
+        return return_error(env, "no_notifier_available");
 
     //setting the notifier flag will close the notifier thread
     jc->notifier_flag=1;
@@ -659,11 +676,11 @@ static ERL_NIF_TERM nif_get_realtime_usec (ErlNifEnv *env, int argc, const ERL_N
     int r;
 
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+        return atom_badarg;
 
     r = sd_journal_get_realtime_usec(jc->journal_pointer, &usec);
     if(r < 0 ) 
-        return enif_make_tuple2(env, atom_error, enif_make_string(env,"getting realtime failed",ERL_NIF_LATIN1));
+        return return_error(env, "getting_realtime_failed");
 
     return enif_make_tuple2(env, atom_ok, enif_make_uint64(env, usec)); 
 }
@@ -675,66 +692,14 @@ static ERL_NIF_TERM nif_seek_realtime_usec (ErlNifEnv *env, int argc, const ERL_
     int r;
     
     if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+        return atom_badarg;
     
     if(!enif_get_uint64(env, argv[1], &usec))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
+        return atom_badarg;
 
     r = sd_journal_seek_realtime_usec(jc->journal_pointer, usec);
     if(r < 0) 
-        return enif_make_tuple2(env, atom_error, enif_make_string(env,"seeking realtime failed",ERL_NIF_LATIN1));
-    
-    return atom_ok;
-}
-
-static ERL_NIF_TERM nif_get_monotonic_usec (ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]){
-
-    journal_container *jc;
-    uint64_t usec;
-    int r;
-    
-    if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
-
-    sd_id128_t boot_id;
-
-    r = sd_journal_get_monotonic_usec(jc->journal_pointer, &usec, &boot_id);
-    if(r < 0) 
-        return enif_make_tuple2(env, atom_error, enif_make_string(env,"getting monotonic time failed",ERL_NIF_LATIN1));
-    
-    char boot_id_as_string[33];
-    sd_id128_to_string( boot_id, boot_id_as_string);
-
-    return enif_make_tuple3(env, atom_ok, enif_make_uint64(env, usec), enif_make_string(env, boot_id_as_string, ERL_NIF_LATIN1)); 
-}
-
-static ERL_NIF_TERM nif_seek_monotonic_usec (ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]){
-
-    journal_container *jc;
-    unsigned int ip;
-    uint64_t usec;
-    int r;
-    
-    if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
-
-    if (!enif_get_list_length(env, argv[1], &ip))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
-    
-    char field[ip+1];
-    if (!enif_get_string(env, argv[1], field, ip, ERL_NIF_LATIN1))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
-    field[ip] = '\0';
-
-    if(!enif_get_uint64(env, argv[2], &usec))
-        return enif_make_tuple2(env, atom_error, enif_make_string(env, "bad argument", ERL_NIF_LATIN1));
-
-    sd_id128_t boot_id;
-    sd_id128_from_string(field, &boot_id);
-
-    r = sd_journal_seek_monotonic_usec(jc->journal_pointer, boot_id, usec);
-    if(r < 0) 
-        return enif_make_tuple2(env, atom_error, enif_make_string(env,"seeking monotonic time failed",ERL_NIF_LATIN1));
+        return return_error(env, "seeking_realtime_failed");
     
     return atom_ok;
 }
@@ -742,36 +707,34 @@ static ERL_NIF_TERM nif_seek_monotonic_usec (ErlNifEnv *env, int argc, const ERL
 static ErlNifFunc nif_funcs[] =
 {    
     {"sendv_nif", 1, nif_sendv},
-    {"stream_fd", 3, nif_stream_fd},
-    {"write_fd", 2, nif_write_fd},
-    {"close_fd", 1, nif_close_fd},
+    {"stream_fd_nif", 3, nif_stream_fd},
+    {"write_fd_nif", 2, nif_write_fd},
+    {"close_fd_nif", 1, nif_close_fd},
 
-    {"open", 0, nif_open},
-    {"open_directory", 1, nif_open_directory},
-    {"close", 1, nif_close},
-    {"next", 1, nif_next},
-    {"previous", 1, nif_previous},
-    {"get_data", 2, nif_get_data},
-    {"add_match", 2, nif_add_match},
-    {"add_disjunction", 1, nif_add_disjunction},
-//    {"add_conjunction", 1, nif_add_conjunction},
-    {"flush_matches", 1, nif_flush_matches},
-    {"seek_head", 1, nif_seek_head},
-    {"seek_tail", 1, nif_seek_tail},
-    {"get_cursor", 1, nif_get_cursor},
-    {"test_cursor", 2, nif_test_cursor},
-    {"seek_cursor", 2, nif_seek_cursor},
-    {"query_unique", 2, nif_query_unique},
-    {"enumerate_unique", 1, nif_enumerate_unique},
-    {"restart_unique", 1, nif_restart_unique},
-    {"enumerate_data", 1, nif_enumerate_data},
-    {"restart_data", 1, nif_restart_data},
-    {"open_notifier", 2, nif_open_notifier},
-    {"close_notifier", 1, nif_close_notifier},
-    {"get_realtime_usec", 1, nif_get_realtime_usec},
-    {"seek_realtime_usec", 2, nif_seek_realtime_usec},
-    {"get_monotonic_usec", 1, nif_get_monotonic_usec},
-    {"seek_monotonic_usec", 3, nif_seek_monotonic_usec}    
+    {"open_nif", 0, nif_open},
+    {"open_directory_nif", 1, nif_open_directory},
+    {"close_nif", 1, nif_close},
+    {"next_nif", 1, nif_next},
+    {"previous_nif", 1, nif_previous},
+    {"get_data_nif", 2, nif_get_data},
+    {"add_match_nif", 2, nif_add_match},
+    {"add_disjunction_nif", 1, nif_add_disjunction},
+//    {"add_conjunction_nif", 1, nif_add_conjunction},
+    {"flush_matches_nif", 1, nif_flush_matches},
+    {"seek_head_nif", 1, nif_seek_head},
+    {"seek_tail_nif", 1, nif_seek_tail},
+    {"get_cursor_nif", 1, nif_get_cursor},
+    {"test_cursor_nif", 2, nif_test_cursor},
+    {"seek_cursor_nif", 2, nif_seek_cursor},
+    {"query_unique_nif", 2, nif_query_unique},
+    {"enumerate_unique_nif", 1, nif_enumerate_unique},
+    {"restart_unique_nif", 1, nif_restart_unique},
+    {"enumerate_data_nif", 1, nif_enumerate_data},
+    {"restart_data_nif", 1, nif_restart_data},
+    {"open_notifier_nif", 2, nif_open_notifier},
+    {"close_notifier_nif", 1, nif_close_notifier},
+    {"get_realtime_usec_nif", 1, nif_get_realtime_usec},
+    {"seek_realtime_usec_nif", 2, nif_seek_realtime_usec}
 };
 
 ERL_NIF_INIT(journald_api,nif_funcs,load,NULL,NULL,NULL)
