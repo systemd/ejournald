@@ -1,28 +1,28 @@
 -module(ejournald_io_server).
 
--export([start_link/1, init/1, loop/1, get_line/2, get_chars/3]).
+-export([start_link/0, start_link/1, init/1, loop/1, get_line/2, get_chars/3]).
 
 -define(CHARS_PER_REC, 10).
 
 -compile({no_auto_import,[get/1]}).
 
--record(field, {read,
-				rest
-}).
-
--record(position, {	cursor,
-					byte_pos,
-					eof
+-record(field, {
+	read,
+	rest,
+	name
 }).
 
 -record(state, {
-	  fd, 
-	  fd_stream,
-	  field,
-	  position,	
-	  direction,
-	  mode 
+	fd, 
+	fd_stream,
+	field,
+	direction,
+	mode,
+	eof
 }).
+
+start_link() ->
+	start_link([]).
 
 start_link(Options) ->
     spawn_link(?MODULE,init,[Options]).
@@ -30,59 +30,40 @@ start_link(Options) ->
 init(Options) ->
 	{ok, Fd} = journald_api:open(),
 	Dir = proplists:get_value(direction, Options, bot),
-	case Dir of
-		bot ->
-			ok = journald_api:seek_head(Fd),
-			ok = journald_api:next(Fd);
-		top ->
-			ok = journald_api:seek_tail(Fd),
-			ok = journald_api:previous(Fd)
-	end,
+	StartPos = proplists:get_value(position, Options, head),
     Fd_stream = journald_api:stream_fd("ejournald_io_server", 5, 0),
-    Cursor = journald_api:get_cursor(Fd),
-    {ok, Rest} = journald_api:enumerate_data(Fd),
-    Field = #field{read = [], rest = Rest ++ [$\n]},
-    Position = #position{cursor = Cursor, byte_pos = 0, eof = false},
-    loop(#state{fd = Fd, fd_stream = Fd_stream, field = Field, position = Position, mode=list, direction = Dir}).
+    State = #state{fd = Fd, fd_stream = Fd_stream, direction = Dir, mode = list},
+    loop(reset_entry(StartPos, State)).
 
-loop(State = #state{fd = Fd, position = Pos}) ->
+loop(State) ->
     receive
 		{io_request, From, ReplyAs, Request} ->
 		    case request(Request,State) of
 				{Tag, Reply, NewState} when Tag =:= ok; Tag =:= error ->
 				    reply(From, ReplyAs, Reply),
-				    ?MODULE:loop(NewState);
+				    loop(NewState);
 				{stop, Reply, _NewState} ->
 				    reply(From, ReplyAs, Reply),
 				    exit(Reply)
 		    end;
-		{From, rewind_top} ->
-			journald_api:seek_head(Fd),
-			journald_api:next(Fd),
-		    NewCursor = journald_api:get_cursor(Fd),
-		   	ok = journald_api:restart_data(Fd),
-		    {ok, Rest} = journald_api:enumerate_data(Fd),
-		    Field = #field{read = [], rest = Rest ++ [$\n]},
-		    NewPos = #position{cursor = NewCursor, byte_pos = 0, eof = false},
+		{From, rewind_head} ->
 		    From ! {self(), ok},
-    		loop(State#state{field = Field, position = NewPos, direction = bot});
-		{From, rewind_bot} ->
-			journald_api:seek_tail(Fd),
-			journald_api:previous(Fd),
-		    NewCursor = journald_api:get_cursor(Fd),
-		   	ok = journald_api:restart_data(Fd),
-		    {ok, Rest} = journald_api:enumerate_data(Fd),
-		    Field = #field{read = [], rest = Rest ++ [$\n]},
-		    NewPos = #position{cursor = NewCursor, byte_pos = 0, eof = false},
+    		loop(reset_entry(head, State));
+		{From, rewind_tail} ->
 		    From ! {self(), ok},
-    		loop(State#state{field = Field, position = NewPos, direction = top});
+    		loop(reset_entry(tail, State));
+		{From, reset_entry, Pos} ->
+			reply_wrapper(From, reset_entry(Pos, State));
+		{From, next_entry} ->
+			reply_wrapper(From, reset_entry(next, State));
+		{From, next_field} ->
+			reply_wrapper(From, next_field(State));
+		{From, reset_fields} ->
+		    From ! {self(), ok},
+    		loop(reset_fields(State));
 		{From, change_dir, Dir} when Dir =:= bot; Dir =:= top ->
-		   	ok = journald_api:restart_data(Fd),
-		    {ok, Rest} = journald_api:enumerate_data(Fd),
-		    Field = #field{read = [], rest = Rest ++ [$\n]},
-		    NewPos = Pos#position{byte_pos = 0, eof = false},
 		    From ! {self(), ok},
-    		loop(State#state{field = Field, position = NewPos, direction = Dir});
+    		loop(State#state{direction = Dir});
 		_Unknown ->
 		    loop(State)
     end.
@@ -164,53 +145,26 @@ get_until(Encoding, Mod, Func, As, #state{mode = M} = State) ->
 get_loop(M,F,A,State,C) ->
     {NewState,L} = get(State),
     case catch apply(M,F,[C,L|A]) of
-		{done, List, _Rest} ->
-		    {done, List, [], NewState};
+		{done, List, FunRest} ->
+			#field{read = Read, rest = Rest} = NewState#state.field,
+			{Read1, _} = lists:split(length(Read)-length(FunRest), Read),
+			Rest1 = FunRest ++ Rest,
+			Field1 = #field{read = Read1, rest = Rest1},
+		    {done, List, [], NewState#state{field = Field1}};
 		{more, NewC} ->
 		    get_loop(M,F,A,NewState,NewC);
 		_ ->
 		    {error,F}
     end.
 
-get(State = #state{position = #position{eof = true}}) ->
-	{State, eof};
-get(State = #state{fd = Fd, field = Field, position = Pos, direction = Dir}) ->
+get(State = #state{field = Field}) ->
 	#field{read = Read, rest = Rest} = Field,
-	#position{byte_pos = BytePos} = Pos,
 	case Rest of
 		[] ->
-			case journald_api:enumerate_data(Fd) of
-				{ok, [Char | Rest1]} ->
-					Field1 = #field{read = [Char], rest = Rest1 ++ [$\n]},
-					Pos1 = Pos#position{byte_pos = 1},
-					NewState = State#state{field = Field1, position = Pos1},
-					{NewState, [Char]};
-				eaddrnotavail ->
-					case Dir of
-						bot ->
-							DirTest = journald_api:next(Fd);
-						top ->
-							DirTest = journald_api:previous(Fd)
-					end,
-					case DirTest of
-						eaddrnotavail ->
-							Field1 = #field{read = undefined, rest = undefined},
-							Pos1 = Pos#position{cursor = undefined, byte_pos = 0, eof = true},
-							NewState = State#state{field = Field1, position = Pos1},
-							{NewState, eof};
-						ok ->
-							NewCursor = journald_api:get_cursor(Fd),
-							{ok, [Char | Rest1]} = journald_api:enumerate_data(Fd),
-							Field1 = #field{read = [Char], rest = Rest1 ++ [$\n]},
-							Pos1 = Pos#position{cursor = NewCursor, byte_pos = 1},
-							NewState = State#state{field = Field1, position = Pos1},
-							{NewState, [Char]}
-					end
-			end;
+			{State, eof};
 		[Char | Rest1] ->
 			Field1 = #field{read = Read ++ [Char], rest = Rest1},
-			Pos1 = Pos#position{byte_pos = BytePos + 1},
-			NewState = State#state{field = Field1, position = Pos1},
+			NewState = State#state{field = Field1},
 			{NewState, [Char]}
 	end.
 
@@ -265,8 +219,57 @@ get_line(ThisFar,[Char]) ->
             {more,ThisFar++[Char]}
     end.
 
+get_chars(ThisFar, eof, _N) ->
+	{done, ThisFar, []};
 get_chars(ThisFar, [Char], N) when length(ThisFar) + 1 >= N ->
     {done,ThisFar ++ [Char],[]};
 get_chars(ThisFar,[Char],_N) ->
 	{more,ThisFar ++ [Char]}.
 
+reset_entry(Pos, State = #state{fd = Fd, direction = Dir}) ->
+	case Pos of
+		head ->
+			ok = journald_api:seek_head(Fd),
+			Error = journald_api:next(Fd);
+		tail ->
+			ok = journald_api:seek_tail(Fd),
+			Error = journald_api:previous(Fd);
+		next when Dir =:= bot ->
+			Error = journald_api:next(Fd);
+		next when Dir =:= top ->
+			Error = journald_api:previous(Fd);
+		stay ->
+			Error = ok;
+		Cursor ->
+			ok = journald_api:seek_cursor(Fd, Cursor),
+			Error = journald_api:next(Fd)
+	end,
+	case Error of
+		ok ->
+			reset_fields(State);
+		_Error ->
+			{Error, State}
+	end.
+
+reset_fields(State = #state{fd = Fd}) ->
+	ok = journald_api:restart_data(Fd),
+	next_field(State).
+
+next_field(State = #state{fd = Fd}) ->
+    case journald_api:enumerate_data(Fd) of
+    	{ok, Rest} ->
+    		{Name, _} = lists:splitwith(fun(Char) -> Char /= $= end, Rest),
+    		Field = #field{read = [], rest = Rest, name = Name},
+    		State#state{field = Field};
+    	_NoMore ->
+    		{eaddrnotavail, State}
+    end.
+
+reply_wrapper(From, Result) ->
+	case Result of
+		{Error, State1} ->
+	    	From ! {self(), Error};
+	    State1 ->
+		    From ! {self(), ok}
+	end,
+	loop(State1).
