@@ -2,6 +2,6 @@
 {application, ejournald, [
     {description, "erlang interface to journald"},
 	{applications, [kernel, stdlib]},
-	{registered, [ejournald_io_sup]},
+	{registered, [ejournald_sup]},
 	{mod, {ejournald, []}}
 ]}.

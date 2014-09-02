@@ -1,33 +1,30 @@
--module(ejournald_io_sup).
+-module(ejournald_sup).
 
 -behaviour(supervisor).
 
 -export([init/1]).
 -export([start_link/0,
-		 start_io_server/1,
-		 start_io_server/2,
-		 stop_io_server/1
+		 start/2,
+		 start/3,
+		 stop/1
 		]).
 
-%% ----------------------------------------------------------------------------------------------------
-%% -- Public API
 start_link() ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
-%% @doc start an ejournald_io_server process
-start_io_server(Options) ->
-    ChildSpec = generate_child_spec(Options),
+%% ----------------------------------------------------------------------------------------------------
+%% -- Public API for io server
+start(Mod, Options) ->
+    ChildSpec = child_spec(Mod, Options),
     supervisor:start_child(?MODULE, ChildSpec).
 
-%% @doc start a named ejournald_io_server process
-start_io_server(Name, Options) ->
-    ChildSpec = generate_child_spec(Name, Options),
+start(Mod, Name, Options) ->
+    ChildSpec = child_spec(Name, Mod, Options),
     {ok, Pid} = supervisor:start_child(?MODULE, ChildSpec),
     register(Name, Pid),
     {ok, Pid}.
 
-%% @doc stop a client process
-stop_io_server(Name) when is_atom(Name) ->
+stop(Name) when is_atom(Name) ->
     case whereis(Name) of
         Pid when is_pid(Pid) -> 
         	supervisor:terminate_child(?MODULE, Name),
@@ -35,9 +32,9 @@ stop_io_server(Name) when is_atom(Name) ->
         _ -> 
         	ok
     end;
-stop_io_server(Pid) when is_pid(Pid) -> 
+stop(Pid) when is_pid(Pid) -> 
     supervisor:terminate_child(?MODULE, Pid);
-stop_io_server(Name) ->
+stop(Name) ->
     supervisor:terminate_child(?MODULE, Name),
     supervisor:delete_child(?MODULE, Name).
 
@@ -48,13 +45,13 @@ init(_Arg) ->
 
 %% ----------------------------------------------------------------------------------------------------
 %% -- helpers
-generate_child_spec(Options) ->
-	generate_child_spec(make_ref(), Options).
-generate_child_spec(Name, Options) ->
+child_spec(Mod, Options) ->
+	child_spec(make_ref(), Mod, Options).
+child_spec(Name, Mod, Options) ->
     {   Name,
-        {ejournald_io_server, start_link, [Options]},
+        {Mod, start_link, [Options]},
         transient,
         infinity,
         worker,
-        [ejournald_io_server]
+        [Mod]
     }.
