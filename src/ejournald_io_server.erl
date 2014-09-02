@@ -1,6 +1,6 @@
 -module(ejournald_io_server).
 
--export([start_link/0, start_link/1, init/1, loop/1, get_line/2, get_chars/3]).
+-export([start_link/1, init/1, loop/1, get_line/2, get_chars/3]).
 
 -define(CHARS_PER_REC, 10).
 
@@ -21,19 +21,13 @@
 	eof
 }).
 
-start_link() ->
-	start_link([]).
-
 start_link(Options) ->
-    spawn_link(?MODULE,init,[Options]).
+    Pid = spawn_link(?MODULE,init,[Options]),
+    {ok, Pid}.
 
 init(Options) ->
-	{ok, Fd} = journald_api:open(),
-	Dir = proplists:get_value(direction, Options, bot),
-	StartPos = proplists:get_value(position, Options, head),
-    Fd_stream = journald_api:stream_fd("ejournald_io_server", 5, 0),
-    State = #state{fd = Fd, fd_stream = Fd_stream, direction = Dir, mode = list},
-    loop(reset_entry(StartPos, State)).
+	State = evaluate_options(Options),
+    loop(State).
 
 loop(State) ->
     receive
@@ -273,3 +267,15 @@ reply_wrapper(From, Result) ->
 		    From ! {self(), ok}
 	end,
 	loop(State1).
+	
+evaluate_options(Options) ->
+	{ok, Fd} = journald_api:open(),
+	Dir = proplists:get_value(direction, Options, bot),
+	StartPos = proplists:get_value(position, Options, head),
+	Fd_stream_name = proplists:get_value(stream_name, Options, "ejournald_io_server"),
+	Fd_stream_prio = proplists:get_value(stream_prio, Options, 5),
+	Fd_stream_level_prefix = proplists:get_value(stream_level_prefix, Options, 0),
+    Fd_stream = journald_api:stream_fd(Fd_stream_name, Fd_stream_prio, Fd_stream_level_prefix),
+    State = #state{fd = Fd, fd_stream = Fd_stream, direction = Dir, mode = list},
+   	reset_entry(StartPos, State).
+

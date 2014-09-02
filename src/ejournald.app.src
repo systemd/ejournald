@@ -1,9 +1,7 @@
 %% -*- erlang -*-
 {application, ejournald, [
-    {description, "journald adapter"},
+    {description, "erlang interface to journald"},
 	{applications, [kernel, stdlib]},
-	{registered, []},
-	{included_applications, []},
-	{env, [
-    ]}
+	{registered, [ejournald_io_sup]},
+	{mod, {ejournald, []}}
 ]}.
