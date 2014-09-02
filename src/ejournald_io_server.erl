@@ -55,6 +55,8 @@ loop(State) ->
 		{From, reset_fields} ->
 		    From ! {self(), ok},
     		loop(reset_fields(State));
+		{From, next_message} ->
+			reply_wrapper(From, next_message(State));
 		{From, change_dir, Dir} when Dir =:= bot; Dir =:= top ->
 		    From ! {self(), ok},
     		loop(State#state{direction = Dir});
@@ -252,12 +254,23 @@ reset_fields(State = #state{fd = Fd}) ->
 next_field(State = #state{fd = Fd}) ->
     case journald_api:enumerate_data(Fd) of
     	{ok, Rest} ->
-    		{Name, _} = lists:splitwith(fun(Char) -> Char /= $= end, Rest),
-    		Field = #field{read = [], rest = Rest, name = Name},
-    		State#state{field = Field};
+    		insert_field(Rest, State);
     	_NoMore ->
     		{eaddrnotavail, State}
     end.
+
+next_message(State = #state{fd = Fd}) ->
+    case journald_api:get_data(Fd, "MESSAGE") of
+    	{ok, Msg} ->
+    		insert_field(Msg, State);
+    	_NoMore ->
+    		{eaddrnotavail, State}
+    end.
+
+insert_field(Rest, State) ->
+	{Name, _} = lists:splitwith(fun(Char) -> Char /= $= end, Rest),
+	Field = #field{read = [], rest = Rest, name = Name},
+	State#state{field = Field}.
 
 reply_wrapper(From, Result) ->
 	case Result of
@@ -267,7 +280,7 @@ reply_wrapper(From, Result) ->
 		    From ! {self(), ok}
 	end,
 	loop(State1).
-	
+
 evaluate_options(Options) ->
 	{ok, Fd} = journald_api:open(),
 	Dir = proplists:get_value(direction, Options, bot),
