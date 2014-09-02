@@ -6,6 +6,12 @@
 
 -compile({no_auto_import,[get/1]}).
 
+-record(time_frame, {
+	active,
+	fst_cursor,
+	snd_cursor
+	}).
+
 -record(field, {
 	read,
 	rest,
@@ -16,6 +22,7 @@
 	fd, 
 	fd_stream,
 	field,
+	time_frame,
 	direction,
 	mode,
 	eof
@@ -46,6 +53,8 @@ loop(State) ->
 		{From, rewind_tail} ->
 		    From ! {self(), ok},
     		loop(reset_entry(tail, State));
+		{From, set_timeframe, DateTime1, DateTime2} ->
+			reply_wrapper(From, set_timeframe(DateTime1, DateTime2, State));
 		{From, reset_entry, Pos} ->
 			reply_wrapper(From, reset_entry(Pos, State));
 		{From, next_entry} ->
@@ -55,8 +64,8 @@ loop(State) ->
 		{From, reset_fields} ->
 		    From ! {self(), ok},
     		loop(reset_fields(State));
-		{From, next_message} ->
-			reply_wrapper(From, next_message(State));
+		{From, set_field, FieldName} ->
+			reply_wrapper(From, set_field(FieldName, State));
 		{From, change_dir, Dir} when Dir =:= bot; Dir =:= top ->
 		    From ! {self(), ok},
     		loop(State#state{direction = Dir});
@@ -222,30 +231,64 @@ get_chars(ThisFar, [Char], N) when length(ThisFar) + 1 >= N ->
 get_chars(ThisFar,[Char],_N) ->
 	{more,ThisFar ++ [Char]}.
 
-reset_entry(Pos, State = #state{fd = Fd, direction = Dir}) ->
+move_head(Pos, #state{fd = Fd, direction = Dir, time_frame = TimeFrame}) ->
+	#time_frame{fst_cursor = Cursor1, snd_cursor = Cursor2} = TimeFrame,
 	case Pos of
+		next ->
+			case Dir of 
+				bot when Cursor2 /= undefined -> 
+					case journald_api:test_cursor(Fd, Cursor2) of
+						ok -> ok;
+						eaddrnotavail ->
+							journald_api:next(Fd)
+					end;
+				bot ->
+					journald_api:next(Fd);
+				top when Cursor1 /= undefined -> 
+					case journald_api:test_cursor(Fd, Cursor1) of
+						ok -> ok;
+						eaddrnotavail ->
+							journald_api:previous(Fd)
+					end;
+				top ->
+					journald_api:previous(Fd)
+			end;
+		head when Cursor1 /= undefined ->
+			ok = journald_api:seek_cursor(Fd, Cursor1),
+			journald_api:previous(Fd);
 		head ->
 			ok = journald_api:seek_head(Fd),
-			Error = journald_api:next(Fd);
+			journald_api:next(Fd);
+		tail when Cursor2 /= undefined ->
+			ok = journald_api:seek_cursor(Fd, Cursor2),
+			journald_api:next(Fd);
 		tail ->
 			ok = journald_api:seek_tail(Fd),
-			Error = journald_api:previous(Fd);
-		next when Dir =:= bot ->
-			Error = journald_api:next(Fd);
-		next when Dir =:= top ->
-			Error = journald_api:previous(Fd);
-		stay ->
-			Error = ok;
-		Cursor ->
-			ok = journald_api:seek_cursor(Fd, Cursor),
-			Error = journald_api:next(Fd)
-	end,
-	case Error of
+			journald_api:previous(Fd);
+		stay -> 
+			ok
+	end.
+
+reset_entry(Pos, State) ->
+	case move_head(Pos, State) of
 		ok ->
 			reset_fields(State);
-		_Error ->
+		Error ->
 			{Error, State}
 	end.
+
+reset_cursor(undefined, State) ->
+	reset_fields(State);
+reset_cursor(Cursor, State = #state{fd = Fd}) ->
+	journald_api:seek_cursor(Fd, Cursor),
+	journald_api:next(Fd),
+	case journald_api:test_cursor(Fd, Cursor) of
+		ok -> ok;
+		_ -> 
+			journald_api:seek_cursor(Fd, Cursor),
+			journald_api:previous(Fd)
+	end,
+	reset_fields(State).
 
 reset_fields(State = #state{fd = Fd}) ->
 	ok = journald_api:restart_data(Fd),
@@ -259,8 +302,8 @@ next_field(State = #state{fd = Fd}) ->
     		{eaddrnotavail, State}
     end.
 
-next_message(State = #state{fd = Fd}) ->
-    case journald_api:get_data(Fd, "MESSAGE") of
+set_field(FieldName, State = #state{fd = Fd}) ->
+    case journald_api:get_data(Fd, FieldName) of
     	{ok, Msg} ->
     		insert_field(Msg, State);
     	_NoMore ->
@@ -289,6 +332,53 @@ evaluate_options(Options) ->
 	Fd_stream_prio = proplists:get_value(stream_prio, Options, 5),
 	Fd_stream_level_prefix = proplists:get_value(stream_level_prefix, Options, 0),
     Fd_stream = journald_api:stream_fd(Fd_stream_name, Fd_stream_prio, Fd_stream_level_prefix),
-    State = #state{fd = Fd, fd_stream = Fd_stream, direction = Dir, mode = list},
+    State = #state{fd = Fd, fd_stream = Fd_stream, direction = Dir, mode = list, time_frame = #time_frame{}},
    	reset_entry(StartPos, State).
+
+set_timeframe(DateTime1, DateTime2, State) ->
+    {ok, Cursor1} = seek_timestamp(DateTime1, State),
+    {ok, Cursor2} = seek_timestamp(DateTime2, State),
+	case State#state.direction of
+		bot -> State1 = reset_cursor(Cursor1, State);
+		top -> State1 = reset_cursor(Cursor2, State)
+	end,
+    TimeFrame = #time_frame{active = true, fst_cursor = Cursor1, snd_cursor = Cursor2},
+    State1#state{time_frame = TimeFrame}.
+
+seek_timestamp(undefined, _State) ->
+	{ok, undefined};
+seek_timestamp(DateTime, #state{fd = Fd}) ->
+    Time = datetime_to_unix_seconds(DateTime),
+    ok = journald_api:seek_realtime_usec(Fd, Time),
+    case journald_api:next(Fd) of
+    	ok -> ok;
+    	eaddrnotavail ->
+    		journald_api:seek_tail(Fd),
+    		journald_api:previous(Fd)
+    end,
+    {ok, EntryTimeNext} = journald_api:get_realtime_usec(Fd),
+    ok = journald_api:seek_realtime_usec(Fd, Time),
+    case journald_api:previous(Fd) of
+    	ok -> ok;
+    	eaddrnotavail ->
+    		journald_api:seek_head(Fd),
+    		journald_api:next(Fd)
+    end,
+    {ok, EntryTimePrevious} = journald_api:get_realtime_usec(Fd),
+    Diff1 = Time - EntryTimeNext,
+    Diff2 = Time - EntryTimePrevious,
+    case (abs(Diff1) < abs(Diff2)) of
+    	true ->
+		    ok = journald_api:seek_realtime_usec(Fd, Time),
+		    ok = journald_api:next(Fd),
+		    journald_api:get_cursor(Fd);
+		false ->
+		    journald_api:get_cursor(Fd)
+	end.
+
+datetime_to_unix_seconds(DateTime) ->
+    DateTimeInSecs = calendar:datetime_to_gregorian_seconds(DateTime),
+	UnixEpoch={{1970,1,1},{0,0,0}},
+    UnixTimeInSecs = calendar:datetime_to_gregorian_seconds(UnixEpoch),
+	1000000*(DateTimeInSecs-UnixTimeInSecs).
 
