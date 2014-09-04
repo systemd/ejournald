@@ -4,10 +4,10 @@
 -export([start/2, stop/1]).
 -export([start_io/1, start_io/2, stop_io/1,
 		 start_reader/1, start_reader/2, stop_reader/1,
-		 get_logs/1
+		 get_logs/1, get_logs/2
 		]).
--export([log_notify/2,
-		 log_notify_worker/2
+-export([log_notify/2, log_notify/3,
+		 log_notify_worker/3
 		]).
 
 -define(READER, ejournald_reader).
@@ -48,31 +48,40 @@ stop_reader(Id) ->
 %% ----------------------------------------------------------------------------------------------------
 %% -- API for retrieving logs
 get_logs(Options) ->
-	gen_server:call(?READER, {evaluate, Options}).
+	get_logs(?READER, Options).
+
+get_logs(Id, Options) ->
+	gen_server:call(Id, {evaluate, Options}).
 
 log_notify(Sink, Options) ->
-	evaluate_options_notify(Sink, Options).
+	log_notify(?READER, Sink, Options).
+
+log_notify(Id, Sink, Options) ->
+	evaluate_options_notify(Id, Sink, Options).
 
 %% ----------------------------------------------------------------------------------------------------
 %% -- helpers
-evaluate_options_notify(Sink, Options) -> 
+evaluate_options_notify(Id, Sink, Options) -> 
 	case Sink of
 		undefined -> erlang:error(badarg, {error, no_sink});
 		_Sink -> ok
 	end,
-	Cursor = gen_server:call(?READER, last_cursor),
-	Pid = spawn(?MODULE, log_notify_worker, [Sink, Options ++ [{last_cursor, Cursor}] ]),
-	ok = gen_server:call(?READER, {register_notifier, Pid}).
+	Cursor = gen_server:call(Id, last_cursor),
+	Pid = spawn(?MODULE, log_notify_worker, [Id, Sink, Options ++ [{last_cursor, Cursor}] ]),
+	ok = gen_server:call(Id, {register_notifier, Pid}),
+	{ok, Pid}.
 
-log_notify_worker(Sink, Options) ->
+log_notify_worker(Id, Sink, Options) ->
 	receive 
 		journal_append ->
 			Options1 = [{direction, bot}] ++ Options,
-			{Result, Cursor} = get_logs(Options1),
+			{Result, Cursor} = get_logs(Id, Options1),
 			evaluate_sink(Sink, Result),
-			log_notify_worker(Sink, proplists:delete(last_cursor, Options) ++ [{last_cursor, Cursor}]);
+			log_notify_worker(Id, Sink, proplists:delete(last_cursor, Options) ++ [{last_cursor, Cursor}]);
 		{'DOWN', _Ref, process, Sink, _Reason} ->
-			gen_server:call(?READER, {unregister_notifier, self()})
+			gen_server:call(Id, {unregister_notifier, self()});
+		exit ->
+			gen_server:call(Id, {unregister_notifier, self()})
 	end.
 
 evaluate_sink(Sink, Result) when is_pid(Sink) ->

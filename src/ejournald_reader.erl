@@ -176,7 +176,7 @@ move(Pos, #state{fd = Fd, direction = Dir, time_frame = TimeFrame}) ->
 				bot when Cursor2 /= undefined -> 
 					case journald_api:test_cursor(Fd, Cursor2) of
 						ok -> eaddrnotavail;
-						eaddrnotavail ->
+						_ ->
 							move1(Fd, next)
 					end;
 				bot ->
@@ -184,7 +184,7 @@ move(Pos, #state{fd = Fd, direction = Dir, time_frame = TimeFrame}) ->
 				top when Cursor1 /= undefined -> 
 					case journald_api:test_cursor(Fd, Cursor1) of
 						ok -> eaddrnotavail;
-						eaddrnotavail ->
+						_ ->
 							move1(Fd, previous)
 					end;
 				top ->
