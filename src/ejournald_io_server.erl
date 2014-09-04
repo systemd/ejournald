@@ -1,6 +1,6 @@
 -module(ejournald_io_server).
 
--export([start_link/1, init/1, loop/1, get_line/2, get_chars/3]).
+-export([start_link/1, init/1, loop/1]).
 
 -record(state, {
 	fd_stream,
@@ -43,12 +43,12 @@ request({put_chars, Encoding, Module, Function, Args}, State) ->
 	    	{error, {error,Function}, State}
     end;
 
-request({get_until, Encoding, _Prompt, M, F, As}, State) ->
-    get_until(Encoding, M, F, As, State);
-request({get_chars, Encoding, _Prompt, N}, State) ->
-    get_until(Encoding, ?MODULE, get_chars, [N], State);
-request({get_line, Encoding, _Prompt}, State) ->
-    get_until(Encoding, ?MODULE, get_line, [], State);
+request({get_until, _Encoding, _Prompt, _M, _F, _As}, State) ->
+	{error, eof, State};
+request({get_chars, _Encoding, _Prompt, _N}, State) ->
+	{error, eof, State};
+request({get_line, _Encoding, _Prompt}, State) ->
+	{error, eof, State};
 request({get_geometry,_}, State) ->
     {error, {error,enotsup}, State};
 request({setopts, Opts}, State) ->
@@ -81,39 +81,6 @@ put_chars(Chars, #state{fd_stream = Fd_stream} = State) ->
 	journald_api:write_fd(Fd_stream, Chars),
     {ok, ok, State}.
 
-get_until(Encoding, Mod, Func, As, #state{mode = M} = State) ->
-    case get_loop(Mod, Func, As, State, []) of
-		{done, Data, _, NewState} when is_binary(Data); is_list(Data) ->
-		    if
-				M =:= binary -> 
-				    {ok, 
-				     unicode:characters_to_binary(Data, unicode, Encoding),
-				     NewState
-				    };
-				true ->
-				    case check(Encoding, unicode:characters_to_list(Data, unicode)) of
-						{error, _} = E ->
-						    {error, E, NewState};
-						List ->
-						    {ok, List, NewState}
-				    end
-		    end;
-		{done, Data, _, NewState} ->
-		    {ok, Data, NewState};
-		Error ->
-		    {error, Error, State}
-    end.
-
-get_loop(M,F,A,State,C) ->
-    case catch apply(M,F,[C,eof|A]) of
-		{done, List, _FunRest} ->
-		    {done, List, [], State};
-		{more, NewC} ->
-		    get_loop(M,F,A,State,NewC);
-		_ ->
-		    {error,F}
-    end.
-
 setopts(Opts0,State) ->
     Opts = proplists:unfold(proplists:substitute_negations([{list,binary}], Opts0)),
     case check_valid_opts(Opts) of
@@ -141,36 +108,6 @@ getopts(#state{mode=M} = S) when M =:= binary ->
     {ok,[{binary, true}],S};
 getopts(S) ->
     {ok,[{binary, false}],S}.
-
-check(unicode, List) ->
-    List;
-check(latin1, List) ->
-    try 
-		[ throw(not_unicode) || X <- List, X > 255 ],
-		List
-    catch
-		throw:_ ->
-	    	{error,{cannot_convert, unicode, latin1}}
-    end.
-
-get_line([],eof) ->
-    {done,eof,[]};
-get_line(ThisFar,eof) ->
-    {done,ThisFar,[]};
-get_line(ThisFar,[Char]) ->
-    case Char of
-    	$\n ->
-    		{done, ThisFar ++ [$\n], []};
-		_NoNewline ->
-            {more,ThisFar++[Char]}
-    end.
-
-get_chars(ThisFar, eof, _N) ->
-	{done, ThisFar, []};
-get_chars(ThisFar, [Char], N) when length(ThisFar) + 1 >= N ->
-    {done,ThisFar ++ [Char],[]};
-get_chars(ThisFar,[Char],_N) ->
-	{more,ThisFar ++ [Char]}.
 
 evaluate_options(Options) ->
 	Fd_stream_name = proplists:get_value(stream_name, Options, "ejournald_io_server"),
