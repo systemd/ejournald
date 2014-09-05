@@ -66,29 +66,33 @@ evaluate_options_notify(Id, Sink, Options) ->
 		undefined -> erlang:error(badarg, {error, no_sink});
 		_Sink -> ok
 	end,
-	Cursor = gen_server:call(Id, last_cursor),
-	Pid = spawn(?MODULE, log_notify_worker, [Id, Sink, Options ++ [{last_cursor, Cursor}] ]),
+	Cursor = gen_server:call(Id, last_entry_cursor),
+	Pid = spawn(?MODULE, log_notify_worker, [Id, Sink, Options ++ [{last_entry_cursor, Cursor}]]),
 	ok = gen_server:call(Id, {register_notifier, Pid}),
 	{ok, Pid}.
 
 log_notify_worker(Id, Sink, Options) ->
 	receive 
 		journal_append ->
-			Options1 = [{direction, bot}] ++ Options,
-			{Result, Cursor} = get_logs(Id, Options1),
+			{Result, Cursor} = gen_server:call(Id, {flush_logs, Options}),
 			evaluate_sink(Sink, Result),
-			log_notify_worker(Id, Sink, proplists:delete(last_cursor, Options) ++ [{last_cursor, Cursor}]);
+			NewOptions = proplists:delete(last_entry_cursor, Options) ++ [{last_entry_cursor, Cursor}],
+			log_notify_worker(Id, Sink, NewOptions);
 		{'DOWN', _Ref, process, Sink, _Reason} ->
 			gen_server:call(Id, {unregister_notifier, self()});
 		exit ->
 			gen_server:call(Id, {unregister_notifier, self()})
 	end.
 
-evaluate_sink(Sink, Result) when is_pid(Sink) ->
-	[ Sink ! Log || Log <- Result ];
-evaluate_sink(Sink, Result) when is_function(Sink) ->
-	[ Sink(Log) || Log <- Result ].
-
-
-
+evaluate_sink(_Sink, []) -> ok;
+evaluate_sink(Sink, [{Timestamp, Log} | Result]) when is_pid(Sink) ->
+	Sink ! {Timestamp, Log},
+	evaluate_sink(Sink, Result);
+evaluate_sink(Sink, [ TsLog = {_Timestamp, _Log} | Result]) when is_function(Sink,1) ->
+	catch(Sink(TsLog)),
+	evaluate_sink(Sink, Result);
+evaluate_sink(Sink, [ _ | Result]) when is_pid(Sink);is_function(Sink,1) ->
+	evaluate_sink(Sink, Result);
+evaluate_sink(_Sink, _Result) ->
+	erlang:error(badarg).
 

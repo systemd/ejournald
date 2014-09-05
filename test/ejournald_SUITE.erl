@@ -34,12 +34,12 @@ io_fwrite(_Config) ->
 %% -- testcases READING
 read_last_3_logs(_Config) ->
 	Logs = ejournald:get_logs([{direction, top}, {at_most, 3}]),
-	[ ct:log(Log) || Log <- Logs ],
+	[ [ ct:log(Field) || Field <- Log ++ ["~n"] ] || {_Timestamp, Log} <- Logs ],
 	ok.
 
 read_last_3_messages(_Config) ->
 	Logs = ejournald:get_logs([{direction, top}, {at_most, 3}, {field, "MESSAGE"}]),
-	[ ct:log(Log) || Log <- Logs ],
+	[ ct:log(Log) || {_Timestamp, Log} <- Logs ],
 	ok.
 
 read_since(_Config) ->
@@ -47,7 +47,7 @@ read_since(_Config) ->
 	{Date, {H, M, S}} = DateTime,
 	Since = {Date, {H, M-5, S}},
 	Logs = ejournald:get_logs([{direction, bot}, {since, Since}, {field, "MESSAGE"}]),
-	[ ct:log(Log) || Log <- Logs ],
+	[ ct:log(Log) || {_Timestamp, Log} <- Logs ],
 	ok.
 
 read_since_until(_Config) -> %% don't try this test around midnight ;) (the days could swap in a bad way)
@@ -56,7 +56,7 @@ read_since_until(_Config) -> %% don't try this test around midnight ;) (the days
 	Since = {Date, {mod(H-1, 24), mod(M-10, 60), S}},
 	Until = {Date, {mod(H-1, 24), mod(M-5, 60), S}},
 	Logs = ejournald:get_logs([{direction, top}, {at_most, 10}, {since, Since}, {until, Until}, {field, "MESSAGE"}]),
-	[ ct:log(Log) || Log <- Logs ],
+	[ ct:log(Log) || {_Timestamp, Log} <- Logs ],
 	ok.
 
 notify(_Config) ->
@@ -88,7 +88,7 @@ mod(0,_Y) -> 0.
 receive_flush(0) -> ok;
 receive_flush(N) ->
 	receive
-		Log -> 
+		{_Timestamp, Log} -> 
 			ct:log(Log),
 			receive_flush(N-1)
 	after
