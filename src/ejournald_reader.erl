@@ -4,6 +4,15 @@
 -export([init/1, handle_cast/2, handle_call/3, handle_info/2, terminate/2, code_change/3]).
 -export([start_link/1]).
 
+-define(LOG_LVLS,  [{emergency, 0}, 
+					{alert, 1}, 
+					{critical, 2}, 
+					{error, 3}, 
+					{warning, 4}, 
+					{notice, 5}, 
+					{info, 6}, 
+					{debug, 7}]).
+
 -record(time_frame, {
 	fst_cursor,
 	snd_cursor
@@ -25,7 +34,11 @@ start_link(Options) ->
 	gen_server:start_link(?MODULE, [Options], []).
 
 init(Options) ->
-	evaluate_options(Options).
+	{ok, Fd} = journald_api:open(),
+	Dir = proplists:get_value(direction, Options, top),
+	Notifier = #notifier{active = false, user_pids = []},
+    State = #state{fd = Fd, direction = Dir, time_frame = #time_frame{}, notifier = Notifier},
+   	{ok, State}.
 
 handle_call({evaluate, Options}, _From, State) ->
 	{Result, NewState} = evaluate_log_options(Options, State),
@@ -50,7 +63,8 @@ handle_info(journal_append, State = #state{notifier = Notifier}) ->
 handle_info(_Msg, State) -> 
 	{noreply, State}.
 
-terminate(_Reason, State = #state{notifier = Notifier}) -> 
+terminate(_Reason, State = #state{fd = Fd, notifier = Notifier}) -> 
+	ok = journald_api:close(Fd),
 	[ unregister_notifier(Pid, State) || Pid <- Notifier#notifier.user_pids ],
 	ok.
 
@@ -59,19 +73,27 @@ handle_cast(_Msg, State) -> {noreply, State}.
 code_change(_,_,State) -> {ok, State}. 
 
 %% ----------------------------------------------------------------------------------------------------
-%% -- helpers
-evaluate_options(Options) ->
-	{ok, Fd} = journald_api:open(),
+%% -- evaluate options for log retrieval
+evaluate_log_options(Options, State) ->
 	Dir = proplists:get_value(direction, Options, top),
-	Notifier = #notifier{active = false, user_pids = []},
-    State = #state{fd = Fd, direction = Dir, time_frame = #time_frame{}, notifier = Notifier},
-   	{ok, State}.
+	AtMost = proplists:get_value(at_most, Options, undefined),
+	Since = proplists:get_value(since, Options, undefined),
+	Until = proplists:get_value(until, Options, undefined),
+	Msg = proplists:get_value(message, Options, undefined),
+	case Msg of
+		true -> Call = next_message;
+		_  	 -> Call = next_entry
+	end,
+	State1 = State#state{direction = Dir},
+	State2 = reset_timeframe(Since, Until, State1),
+	reset_matches(Options, State2),
+	Result = collect_logs(Call, AtMost, State2),
+	{Result, State2}.
 
-reset_entry(Pos, State) ->
-	move(Pos, State).
-
+%% ----------------------------------------------------------------------------------------------------
+%% -- retrieving logs
 next_entry(State = #state{fd = Fd}) ->
-	case reset_entry(next, State) of
+	case move(next, State) of
 		ok -> 
 			{ok, Timestamp} = journald_api:get_realtime_usec(Fd),
 			Fields = get_fields(Fd),
@@ -85,15 +107,15 @@ get_fields(Fd) ->
 get_fields(Fd, Akk) ->
 	case journald_api:enumerate_data(Fd) of
 		{ok, Data} ->
-			get_fields(Fd, Akk ++ [Data]);
+			get_fields(Fd, [Data | Akk]);
 		_ ->
 			Akk
 	end. 
 
-next_field(FieldName, State = #state{fd = Fd}) ->
-	case reset_entry(next, State) of
+next_msg(State = #state{fd = Fd}) ->
+	case move(next, State) of
 		ok -> 
-    		case journald_api:get_data(Fd, FieldName) of
+    		case journald_api:get_data(Fd, "MESSAGE") of
     			{ok, Data} -> 
 					{ok, Timestamp} = journald_api:get_realtime_usec(Fd),
     				{Timestamp, Data};
@@ -103,6 +125,14 @@ next_field(FieldName, State = #state{fd = Fd}) ->
     		Error
     end.
 
+get_last_entry_cursor(#state{fd = Fd}) ->
+	ok = journald_api:seek_tail(Fd),
+	ok = journald_api:previous(Fd),
+	{ok, Cursor} = journald_api:get_cursor(Fd),
+	Cursor.
+
+%% ------------------------------------------------------------------------
+%% -- set pointer
 reset_cursor(Cursor, #state{fd = Fd}) ->
 	journald_api:seek_cursor(Fd, Cursor),
 	journald_api:next(Fd),
@@ -113,12 +143,6 @@ reset_cursor(Cursor, #state{fd = Fd}) ->
 			journald_api:previous(Fd)
 	end,
 	journald_api:seek_cursor(Fd, Cursor).
-
-get_last_entry_cursor(#state{fd = Fd}) ->
-	ok = journald_api:seek_tail(Fd),
-	ok = journald_api:previous(Fd),
-	{ok, Cursor} = journald_api:get_cursor(Fd),
-	Cursor.
 
 reset_timeframe(DateTime1, DateTime2, State = #state{fd = Fd}) ->
     {ok, Cursor1} = seek_timestamp(DateTime1, State),
@@ -173,12 +197,20 @@ seek_timestamp(DateTime, #state{fd = Fd}) ->
 		    journald_api:get_cursor(Fd)
 	end.
 
+reset_matches(Options, #state{fd = Fd}) ->
+	LogLvl = proplists:get_value(log_level, Options, notice),
+	journald_api:flush_matches(Fd),
+	LogLvlInt = proplists:get_value(LogLvl, ?LOG_LVLS),
+	[ journald_api:add_match(Fd, "PRIORITY=" ++ integer_to_list(Lvl)) || Lvl <- lists:seq(LogLvlInt, 7) ].
+
 datetime_to_unix_seconds(DateTime) ->
     DateTimeInSecs = calendar:datetime_to_gregorian_seconds(DateTime),
 	UnixEpoch={{1970,1,1},{0,0,0}},
     UnixTimeInSecs = calendar:datetime_to_gregorian_seconds(UnixEpoch),
 	1000000*(DateTimeInSecs-UnixTimeInSecs).
 
+%% ------------------------------------------------------------------------------
+%% -- pointer movement api
 move(Pos, #state{fd = Fd, direction = Dir, time_frame = TimeFrame}) ->
 	#time_frame{fst_cursor = Cursor1, snd_cursor = Cursor2} = TimeFrame,
 	case Pos of
@@ -222,13 +254,15 @@ move1(Fd, next) ->
 	journald_api:restart_data(Fd),
 	Success.
 
+%% ------------------------------------------------------------------------------
+%% -- notifier api
 register_notifier(Pid, State = #state{fd = Fd, notifier = Notifier}) ->
 	#notifier{active = Active, user_pids = Pids} = Notifier,
 	case Active of
 		false -> ok = journald_api:open_notifier(Fd, self());
 		true -> ok
 	end,
-	NewNotifier = Notifier#notifier{active = true, user_pids = Pids ++ [Pid]},
+	NewNotifier = Notifier#notifier{active = true, user_pids = [Pid | Pids]},
 	State#state{notifier = NewNotifier}.
 
 unregister_notifier(Pid, State = #state{fd = Fd, notifier = Notifier}) ->
@@ -244,31 +278,17 @@ unregister_notifier(Pid, State = #state{fd = Fd, notifier = Notifier}) ->
 	NewNotifier = Notifier#notifier{active = Active, user_pids = NewPids},
 	State#state{notifier = NewNotifier}.
 
-evaluate_log_options(Options, State) ->
-	Dir = proplists:get_value(direction, Options, top),
-	AtMost = proplists:get_value(at_most, Options, undefined),
-	Since = proplists:get_value(since, Options, undefined),
-	Until = proplists:get_value(until, Options, undefined),
-	Field = proplists:get_value(field, Options, undefined),
-	case Field of
-		undefined 	-> Call = next_entry;
-		Field 		-> Call = {next_field, Field}
-	end,
-	State1 = State#state{direction = Dir},
-	State2 = reset_timeframe(Since, Until, State1),
-	Result = collect_logs(Call, AtMost, State2),
-	{Result, State2}.
-
 flush_logs(Options, State = #state{fd = Fd}) ->
 	Cursor = proplists:get_value(last_entry_cursor, Options),
-	Field = proplists:get_value(field, Options, undefined),
-	case Field of
-		undefined 	-> Call = next_entry;
-		Field 		-> Call = {next_field, Field}
+	Msg = proplists:get_value(message, Options, undefined),
+	case Msg of
+		true -> Call = next_message;
+		_  	 -> Call = next_entry
 	end,
 	State1 = State#state{direction = bot, time_frame = #time_frame{}},
 	reset_cursor(Cursor, State),
 	move(next, State1),
+	reset_matches(Options, State1),
 	Result = collect_logs(Call, undefined, State1),
 	case journald_api:get_cursor(Fd) of
 		{ok, NewCursor} -> ok;
@@ -278,22 +298,23 @@ flush_logs(Options, State = #state{fd = Fd}) ->
 	end,
 	{Result, NewCursor}.
 
+%% ------------------------------------------------------------------------------
+%% -- collecting logs
 collect_logs(Call, AtMost, State) ->
 	collect_logs(Call, AtMost, State, []).
 collect_logs(_Call, 0, _State, Akk) ->
-	Akk;
+	lists:reverse(Akk);
 collect_logs(Call, Counter, State, Akk) ->
 	case Call of
 		next_entry ->
 			Result = next_entry(State);
-		{next_field, Field} ->
-			Result = next_field(Field, State)
+		next_message ->
+			Result = next_msg(State)
 	end,
 	case Result of
-		eaddrnotavail -> Akk;
+		eaddrnotavail -> lists:reverse(Akk);
 		Log when Counter =:= undefined ->
-			collect_logs(Call, Counter, State, Akk ++ [Log]);
+			collect_logs(Call, Counter, State, [Log | Akk]);
 		Log when is_number(Counter) ->
-			collect_logs(Call, Counter-1, State, Akk ++ [Log])
+			collect_logs(Call, Counter-1, State, [Log | Akk])
 	end.
-

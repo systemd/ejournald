@@ -38,7 +38,7 @@ read_last_3_logs(_Config) ->
 	ok.
 
 read_last_3_messages(_Config) ->
-	Logs = ejournald:get_logs([{direction, top}, {at_most, 3}, {field, "MESSAGE"}]),
+	Logs = ejournald:get_logs([{direction, top}, {at_most, 3}, {message, true}]),
 	[ ct:log(Log) || {_Timestamp, Log} <- Logs ],
 	ok.
 
@@ -46,7 +46,7 @@ read_since(_Config) ->
 	DateTime = calendar:now_to_universal_time(erlang:now()),
 	{Date, {H, M, S}} = DateTime,
 	Since = {Date, {H, M-5, S}},
-	Logs = ejournald:get_logs([{direction, bot}, {since, Since}, {field, "MESSAGE"}]),
+	Logs = ejournald:get_logs([{direction, bot}, {since, Since}, {message, true}]),
 	[ ct:log(Log) || {_Timestamp, Log} <- Logs ],
 	ok.
 
@@ -55,12 +55,12 @@ read_since_until(_Config) -> %% don't try this test around midnight ;) (the days
 	{Date, {H, M, S}} = DateTime,
 	Since = {Date, {mod(H-1, 24), mod(M-10, 60), S}},
 	Until = {Date, {mod(H-1, 24), mod(M-5, 60), S}},
-	Logs = ejournald:get_logs([{direction, top}, {at_most, 10}, {since, Since}, {until, Until}, {field, "MESSAGE"}]),
+	Logs = ejournald:get_logs([{direction, top}, {at_most, 10}, {since, Since}, {until, Until}, {message, true}]),
 	[ ct:log(Log) || {_Timestamp, Log} <- Logs ],
 	ok.
 
 notify(_Config) ->
-	{ok, _Pid} = ejournald:log_notify(self(), [{field, "MESSAGE"}]),
+	{ok, _Pid} = ejournald:log_notify(self(), [{message, true}]),
 	ok = io:format(?IO_SERVER, "1~n", []),
 	ok = io:format(?IO_SERVER, "2~n", []),
 	ok = io:format(?IO_SERVER, "3~n", []),
@@ -92,6 +92,6 @@ receive_flush(N) ->
 			ct:log(Log),
 			receive_flush(N-1)
 	after
-		200 ->
+		500 ->
 			erlang:error(timeout)
 	end.

@@ -67,7 +67,7 @@ evaluate_options_notify(Id, Sink, Options) ->
 		_Sink -> ok
 	end,
 	Cursor = gen_server:call(Id, last_entry_cursor),
-	Pid = spawn(?MODULE, log_notify_worker, [Id, Sink, Options ++ [{last_entry_cursor, Cursor}]]),
+	Pid = spawn(?MODULE, log_notify_worker, [Id, Sink, [ {last_entry_cursor, Cursor} | Options ]]),
 	ok = gen_server:call(Id, {register_notifier, Pid}),
 	{ok, Pid}.
 
@@ -76,7 +76,7 @@ log_notify_worker(Id, Sink, Options) ->
 		journal_append ->
 			{Result, Cursor} = gen_server:call(Id, {flush_logs, Options}),
 			evaluate_sink(Sink, Result),
-			NewOptions = proplists:delete(last_entry_cursor, Options) ++ [{last_entry_cursor, Cursor}],
+			NewOptions = lists:keyreplace(last_entry_cursor, 1, Options, {last_entry_cursor, Cursor}),
 			log_notify_worker(Id, Sink, NewOptions);
 		{'DOWN', _Ref, process, Sink, _Reason} ->
 			gen_server:call(Id, {unregister_notifier, self()});
