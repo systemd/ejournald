@@ -43,12 +43,6 @@ request({put_chars, Encoding, Module, Function, Args}, State) ->
 	    	{error, {error,Function}, State}
     end;
 
-request({get_until, _Encoding, _Prompt, _M, _F, _As}, State) ->
-	{error, eof, State};
-request({get_chars, _Encoding, _Prompt, _N}, State) ->
-	{error, eof, State};
-request({get_line, _Encoding, _Prompt}, State) ->
-	{error, eof, State};
 request({get_geometry,_}, State) ->
     {error, {error,enotsup}, State};
 request({setopts, Opts}, State) ->
@@ -61,14 +55,8 @@ request({put_chars,Chars}, State) ->
     request({put_chars,latin1,Chars}, State);
 request({put_chars,M,F,As}, State) ->
     request({put_chars,latin1,M,F,As}, State);
-request({get_chars,Prompt,N}, State) ->
-    request({get_chars,latin1,Prompt,N}, State);
-request({get_line,Prompt}, State) ->
-    request({get_line,latin1,Prompt}, State);
-request({get_until, Prompt,M,F,As}, State) ->
-    request({get_until,latin1,Prompt,M,F,As}, State);
 request(_Other, State) ->
-    {error, {error, request}, State}.
+    {error, eof, State}.
 
 multi_request([R|Rs], {ok, _Res, State}) ->
     multi_request(Rs, request(R, State));
