@@ -63,7 +63,7 @@ start_io(Options) ->
 start_io(Name, Options) ->
 	ejournald_sup:start(?IO_SERVER, Name, Options).
 
--spec stop_io( id() ) -> ok | {error, any()}.
+-spec stop_io( term() ) -> ok | {error, any()}.
 stop_io(Id) ->
 	ejournald_sup:stop(Id).
 
@@ -77,27 +77,34 @@ start_reader() ->
 start_reader(Name) ->
 	ejournald_sup:start(?READER, Name, []).
 
--spec stop_reader( id() ) -> ok | {error, any()}.
+-spec stop_reader( term() ) -> ok | {error, any()}.
 stop_reader(Id) ->
 	ejournald_sup:stop(Id).
 
 %% ----------------------------------------------------------------------------------------------------
 %% -- API for retrieving logs
--spec get_logs( [log_options()] ) -> [ log_message() ].
+-spec get_logs( [log_options()] ) -> [ log_message() ] | {error, any()}.
 get_logs(Options) ->
 	get_logs(?READER, Options).
 
--spec get_logs(id(), [log_options()] ) -> [ log_message() ].
+-spec get_logs(id(), [log_options()] ) -> [ log_message() ] | {error, any()}.
 get_logs(Id, Options) ->
-	gen_server:call(Id, {evaluate, Options}).
+	case check_options(Options) of
+		{Error, Reason} -> {Error, Reason};
+		ok 				-> gen_server:call(Id, {evaluate, Options})
+	end.
+	
 
--spec log_notify(sink(), [notify_options()] ) -> {ok, pid()} | {error, atom()}.
+-spec log_notify(sink(), [notify_options()] ) -> {ok, pid()} | {error, any()}.
 log_notify(Sink, Options) ->
 	log_notify(?READER, Sink, Options).
 
--spec log_notify(id(), sink(), [notify_options()] ) -> {ok, pid()} | {error, atom()}.
+-spec log_notify(id(), sink(), [notify_options()] ) -> {ok, pid()} | {error, any()}.
 log_notify(Id, Sink, Options) ->
-	evaluate_options_notify(Id, Sink, Options).
+	case check_options(Options) of
+		{Error, Reason} -> {Error, Reason};
+		ok 				-> evaluate_options_notify(Id, Sink, Options)
+	end.
 
 %% ----------------------------------------------------------------------------------------------------
 %% -- helpers
@@ -138,4 +145,27 @@ evaluate_sink(Sink, [ _ | Result]) when is_pid(Sink);is_function(Sink,1) ->
 	evaluate_sink(Sink, Result);
 evaluate_sink(_Sink, _Result) ->
 	erlang:error(badarg).
+
+%% @private
+check_options([]) ->
+	ok;
+check_options([{direction, Dir} | RestOpts]) when Dir =:=bot;Dir =:= top ->
+	check_options(RestOpts);
+check_options([{since, {{Y,M,D}, {H,Min,S}}} | RestOpts]) 
+	when is_number(Y),is_number(M),is_number(D),is_number(H),is_number(Min),is_number(S) ->
+	check_options(RestOpts);
+check_options([{until, {{Y,M,D}, {H,Min,S}}} | RestOpts]) 
+	when is_number(Y),is_number(M),is_number(D),is_number(H),is_number(Min),is_number(S) ->
+	check_options(RestOpts);
+check_options([{at_most, AtMost} | RestOpts]) when is_number(AtMost) -> 
+	check_options(RestOpts);
+check_options([{log_level, LogLevel} | RestOpts]) when is_atom(LogLevel) -> 
+ 	case lists:member(LogLevel, [emergency, alert, critical, error, warning, notice, info, debug]) of
+ 		true 	-> check_options(RestOpts);
+ 		false 	-> {badarg, {invalid_log_level, LogLevel}}
+ 	end;
+check_options([{message, Message} | RestOpts]) when Message=:=true;Message=:=false -> 
+	check_options(RestOpts);
+check_options([ Arg | _RestOpts]) -> 
+	{badarg, Arg}.
 

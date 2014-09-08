@@ -6,8 +6,19 @@
 -define(READER, ejournald_reader).
 -define(IO_SERVER, ejournald_io_server).
 
+-define(CONTROL, {control, [], [start_stop_io, start_stop_reader]}).
 -define(READ, {read, [], [read_last_3_logs, read_last_3_messages, read_since, read_since_until, notify]}).
 -define(WRITE, {write, [], [io_put_chars, io_format, io_write, io_fwrite]}).
+
+%% ----------------------------------------------------------------------------------------------------
+%% -- testcases CONTROL
+start_stop_io(_Config) ->
+	{ok, _Pid} = ejournald:start_io(test_io, [{name, "test_io"}]),
+	ok = ejournald:stop_io(test_io).
+
+start_stop_reader(_Config) ->
+	{ok, _Pid} = ejournald:start_reader(test_reader),
+	ok = ejournald:stop_reader(test_reader).
 
 %% ----------------------------------------------------------------------------------------------------
 %% -- testcases WRITING
@@ -26,7 +37,7 @@ io_write(_Config) ->
 	ok = io:nl(?IO_SERVER).
 
 io_fwrite(_Config) ->
-	ok = io:fwrite(?IO_SERVER, "Some weird string by fwrite:", []),
+	ok = io:fwrite(?IO_SERVER, "Some string by fwrite:", []),
 	ok = io:fwrite(?IO_SERVER, "|~10.5c|~-10.5c|~5c|~n", [$a, $b, $c]),
 	ok = io:nl(?IO_SERVER).
 
@@ -68,9 +79,9 @@ notify(_Config) ->
 
 %% ----------------------------------------------------------------------------------------------------
 %% -- ct callbacks
-groups() -> [?READ, ?WRITE].
+groups() -> [?CONTROL, ?READ, ?WRITE].
 
-all() -> [{group, write}, {group, read}].
+all() -> [{group, control}, {group, write}, {group, read}].
 
 init_per_suite(Config) ->
 	application:start(ejournald),
