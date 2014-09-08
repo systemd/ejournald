@@ -35,7 +35,6 @@
 -on_load(load_nif/0).
 
 -type value() :: number() | atom() | iolist().
--spec sendv([{iolist(),value()}]) -> any().
 
 -define(nif_stub,nif_stub_error(?LINE)).
 nif_stub_error(Line) ->
@@ -43,6 +42,7 @@ nif_stub_error(Line) ->
 
 %% ----------------------------------------------------------------------------------
 %% -- low level journald API
+-spec sendv([{iolist(),value()}]) -> any().
 sendv(Args) ->
     sendv_nif(list_conversion(Args)).
 

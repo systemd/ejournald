@@ -1,3 +1,4 @@
+%% @private
 -module(ejournald_sup).
 
 -behaviour(supervisor).

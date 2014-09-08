@@ -1,3 +1,4 @@
+%% @private
 -module(ejournald_io_server).
 
 -export([start_link/1, init/1, loop/1]).
@@ -98,8 +99,8 @@ getopts(S) ->
     {ok,[{binary, false}],S}.
 
 evaluate_options(Options) ->
-	Fd_stream_name = proplists:get_value(stream_name, Options, "ejournald_io_server"),
-	Fd_stream_prio = proplists:get_value(stream_prio, Options, 5),
-	Fd_stream_level_prefix = proplists:get_value(stream_level_prefix, Options, 0),
+	Fd_stream_name = proplists:get_value(name, Options, "ejournald_io_server"),
+	Fd_stream_prio = proplists:get_value(log_level, Options, 5),
+	Fd_stream_level_prefix = proplists:get_value(level_prefix, Options, 0),
     Fd_stream = journald_api:stream_fd(Fd_stream_name, Fd_stream_prio, Fd_stream_level_prefix),
     #state{fd_stream = Fd_stream, mode = list}.

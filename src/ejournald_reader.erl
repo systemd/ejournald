@@ -1,3 +1,4 @@
+%% @private
 -module(ejournald_reader).
 -behaviour(gen_server).
 
@@ -33,11 +34,10 @@
 start_link(Options) ->
 	gen_server:start_link(?MODULE, [Options], []).
 
-init(Options) ->
+init(_Options) ->
 	{ok, Fd} = journald_api:open(),
-	Dir = proplists:get_value(direction, Options, top),
 	Notifier = #notifier{active = false, user_pids = []},
-    State = #state{fd = Fd, direction = Dir, time_frame = #time_frame{}, notifier = Notifier},
+    State = #state{fd = Fd, direction = top, time_frame = #time_frame{}, notifier = Notifier},
    	{ok, State}.
 
 handle_call({evaluate, Options}, _From, State) ->
