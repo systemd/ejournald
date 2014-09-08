@@ -95,9 +95,9 @@ evaluate_log_options(Options, State) ->
 next_entry(State = #state{fd = Fd}) ->
 	case move(next, State) of
 		ok -> 
-			{ok, Timestamp} = journald_api:get_realtime_usec(Fd),
+			{Timestamp, Priority} = get_meta_info(Fd),
 			Fields = get_fields(Fd),
-			{unix_seconds_to_datetime(Timestamp), Fields};
+			{Timestamp, Priority, Fields};
 		Error -> Error
 	end.
 
@@ -117,8 +117,8 @@ next_msg(State = #state{fd = Fd}) ->
 		ok -> 
     		case journald_api:get_data(Fd, "MESSAGE") of
     			{ok, Data} -> 
-					{ok, Timestamp} = journald_api:get_realtime_usec(Fd),
-    				{unix_seconds_to_datetime(Timestamp), Data};
+					{Timestamp, Priority} = get_meta_info(Fd),
+    				{Timestamp, Priority, Data};
     			Error -> Error
     		end;
     	Error ->
@@ -130,6 +130,14 @@ get_last_entry_cursor(#state{fd = Fd}) ->
 	ok = journald_api:previous(Fd),
 	{ok, Cursor} = journald_api:get_cursor(Fd),
 	Cursor.
+
+get_meta_info(Fd) ->
+	{ok, UnixTimestamp} = journald_api:get_realtime_usec(Fd),
+	Timestamp = unix_seconds_to_datetime(UnixTimestamp),
+	{ok, PriorityString} = journald_api:get_data(Fd, "PRIORITY"),
+	PriorityInt = list_to_integer(lists:sublist(PriorityString, 10, length(PriorityString))),
+	{Priority, _ } = lists:keyfind(PriorityInt, 2, ?LOG_LVLS),
+	{Timestamp, Priority}.
 
 %% ------------------------------------------------------------------------
 %% -- set pointer

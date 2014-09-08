@@ -39,8 +39,8 @@
 -type notify_options()	:: 	{message, boolean()}.
 -type sink_fun()		::	fun( (log_message()) -> any() ).
 -type sink()			:: 	pid() | sink_fun().
--type log_data()		:: 	string() | [ string() ].
--type log_message()		:: 	{datetime1970(), log_data()}.
+-type log_data()		:: 	string() | [ string() ]. %% depends on the 'message' option
+-type log_message()		:: 	{datetime1970(), log_level(), log_data()}.
 -type id()				:: 	term() | pid().
 
 %% ----------------------------------------------------------------------------------------------------
@@ -128,11 +128,11 @@ log_notify_worker(Id, Sink, Options) ->
 
 %% @private
 evaluate_sink(_Sink, []) -> ok;
-evaluate_sink(Sink, [{Timestamp, Log} | Result]) when is_pid(Sink) ->
-	Sink ! {Timestamp, Log},
+evaluate_sink(Sink, [ Msg = {_Timestamp, _Priority, _Data} | Result]) when is_pid(Sink) ->
+	Sink ! Msg,
 	evaluate_sink(Sink, Result);
-evaluate_sink(Sink, [ TsLog = {_Timestamp, _Log} | Result]) when is_function(Sink,1) ->
-	catch(Sink(TsLog)),
+evaluate_sink(Sink, [ Msg = {_Timestamp, _Priority, _Log} | Result]) when is_function(Sink,1) ->
+	catch(Sink(Msg)),
 	evaluate_sink(Sink, Result);
 evaluate_sink(Sink, [ _ | Result]) when is_pid(Sink);is_function(Sink,1) ->
 	evaluate_sink(Sink, Result);
