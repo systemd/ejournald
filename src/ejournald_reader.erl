@@ -97,7 +97,7 @@ next_entry(State = #state{fd = Fd}) ->
 		ok -> 
 			{ok, Timestamp} = journald_api:get_realtime_usec(Fd),
 			Fields = get_fields(Fd),
-			{Timestamp, Fields};
+			{unix_seconds_to_datetime(Timestamp), Fields};
 		Error -> Error
 	end.
 
@@ -118,7 +118,7 @@ next_msg(State = #state{fd = Fd}) ->
     		case journald_api:get_data(Fd, "MESSAGE") of
     			{ok, Data} -> 
 					{ok, Timestamp} = journald_api:get_realtime_usec(Fd),
-    				{Timestamp, Data};
+    				{unix_seconds_to_datetime(Timestamp), Data};
     			Error -> Error
     		end;
     	Error ->
@@ -208,6 +208,14 @@ datetime_to_unix_seconds(DateTime) ->
 	UnixEpoch={{1970,1,1},{0,0,0}},
     UnixTimeInSecs = calendar:datetime_to_gregorian_seconds(UnixEpoch),
 	1000000*(DateTimeInSecs-UnixTimeInSecs).
+
+unix_seconds_to_datetime(UnixTime) ->
+	Part1 = UnixTime div 1000000000000,
+	Rem1 = UnixTime rem 1000000000000,
+	Part2 = Rem1 div 1000000, 
+	Part3 = Rem1 rem 1000000, 
+	NowTimestamp = {Part1, Part2, Part3},
+	calendar:now_to_local_time(NowTimestamp).
 
 %% ------------------------------------------------------------------------------
 %% -- pointer movement api
