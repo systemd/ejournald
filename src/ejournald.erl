@@ -40,53 +40,63 @@
 -type sink_fun()        ::  fun( (log_message()) -> any() ).
 -type sink()            ::  pid() | sink_fun().
 -type log_data()        ::  string() | [ string() ]. %% depends on the 'message' option
--type log_message()     ::  {datetime1970(), log_level(), log_data()}.
+-type log_message()     ::  {datetime1970(), log_level(), log_data()} | journal_changed.
 -type id()              ::  term() | pid().
 
 %% ----------------------------------------------------------------------------------------------------
 %% -- application callbacks
+%% @doc Application behaviour callback.
 start(_Type, _Args) ->
     ejournald_sup:start_link(),
     start_reader(?READER),
     start_io(?IO_SERVER, []).
 
+%% @doc Application behaviour callback.
 stop(_State) ->
     ok.
 
 %% ----------------------------------------------------------------------------------------------------
 %% -- interface for ejournald_io_server
+%% @doc Start the default I/O-server named ejournald_io_server and identified by the name "ejournald_io_server" for journald.
 -spec start_io( [io_options()] ) -> {ok, pid()} | {error, any()}.
 start_io(Options) ->
     ejournald_sup:start(?IO_SERVER, Options).
 
 -spec start_io( term(), [io_options()] ) -> {ok, pid()} | {error, any()}.
+%% @doc Start an I/O-server with own options. The 'name' option is mandatory and used in journald logs.
 start_io(Name, Options) ->
     ejournald_sup:start(?IO_SERVER, Name, Options).
 
+%% @doc Stop an I/O-server with its name or pid.
 -spec stop_io( term() ) -> ok | {error, any()}.
 stop_io(Id) ->
     ejournald_sup:stop(Id).
 
 %% ----------------------------------------------------------------------------------------------------
 %% -- API for ejournald_reader
+%% @doc Start the default reader named ejournald_reader.
 -spec start_reader() -> {ok, pid()} | {error, any()}.
 start_reader() ->
     ejournald_sup:start(?READER, []).
 
+%% @doc Start your own reader (should not be necessary).
 -spec start_reader( term() ) -> {ok, pid()} | {error, any()}.
 start_reader(Name) ->
     ejournald_sup:start(?READER, Name, []).
 
+%% @doc Stop a reader by its name or pid.
 -spec stop_reader( term() ) -> ok | {error, any()}.
 stop_reader(Id) ->
     ejournald_sup:stop(Id).
 
 %% ----------------------------------------------------------------------------------------------------
 %% -- API for retrieving logs
+%% @doc Get logs from default reader. See get_logs/2.
 -spec get_logs( [log_options()] ) -> [ log_message() ] | {error, any()}.
 get_logs(Options) ->
     get_logs(?READER, Options).
 
+%% @doc Get logs from a named reader.
 -spec get_logs(id(), [log_options()] ) -> [ log_message() ] | {error, any()}.
 get_logs(Id, Options) ->
     case check_options(Options) of
@@ -94,13 +104,14 @@ get_logs(Id, Options) ->
         ok              -> gen_server:call(Id, {evaluate, Options})
     end.
     
-
+%% @doc See log_notify/3.
 -spec log_notify(sink(), [notify_options()] ) -> {ok, pid()} | {error, any()}.
-log_notify(Sink, Options) ->
+log_notify(Sink, Options) when is_pid(Sink);is_function(Sink,1) ->
     log_notify(?READER, Sink, Options).
 
+%% @doc Starts a worker that monitors the journal and filters new entries. 
 -spec log_notify(id(), sink(), [notify_options()] ) -> {ok, pid()} | {error, any()}.
-log_notify(Id, Sink, Options) ->
+log_notify(Id, Sink, Options) when is_pid(Sink);is_function(Sink,1) ->
     case check_options(Options) of
         {Error, Reason} -> {Error, Reason};
         ok              -> evaluate_options_notify(Id, Sink, Options)

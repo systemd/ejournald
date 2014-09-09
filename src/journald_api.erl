@@ -18,6 +18,7 @@
 % FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 % DEALINGS IN THE SOFTWARE.
 
+%% @private
 -module(journald_api).
 
 -define(SYSLOG_ID, "SYSLOG_IDENTIFIER").
@@ -34,15 +35,12 @@
 
 -on_load(load_nif/0).
 
--type value() :: number() | atom() | iolist().
-
 -define(nif_stub,nif_stub_error(?LINE)).
 nif_stub_error(Line) ->
     erlang:nif_error({nif_not_loaded,module,?MODULE,line,Line}).
 
 %% ----------------------------------------------------------------------------------
 %% -- low level journald API
--spec sendv([{iolist(),value()}]) -> any().
 sendv(Args) ->
     sendv_nif(list_conversion(Args)).
 
