@@ -1,36 +1,48 @@
 %% @private
 -module(ejournald_io_server).
+-behaviour(gen_server).
 
--export([start_link/1, init/1, loop/1]).
+-export([start_link/1]).
+-export([init/1, handle_cast/2, handle_call/3, handle_info/2, terminate/2, code_change/3]).
 
 -record(state, {
 	fd_stream,
 	mode
 }).
 
+%% ----------------------------------------------------------------------------------------------------
+%% -- gen_server callbacks
 start_link(Options) ->
-    Pid = spawn_link(?MODULE,init,[Options]),
-    {ok, Pid}.
+	gen_server:start_link(?MODULE, [Options], []).
 
 init(Options) ->
+	%process_flag(trap_exit, true),
 	State = evaluate_options(Options),
-    loop(State).
+	{ok, State}.
 
-loop(State) ->
-    receive
-		{io_request, From, ReplyAs, Request} ->
-		    case request(Request,State) of
-				{Tag, Reply, NewState} when Tag =:= ok; Tag =:= error ->
-				    reply(From, ReplyAs, Reply),
-				    loop(NewState);
-				{stop, Reply, _NewState} ->
-				    reply(From, ReplyAs, Reply),
-				    exit(Reply)
-		    end;
-		_Unknown ->
-		    loop(State)
-    end.
+handle_info({io_request, From, ReplyAs, Request}, State) ->
+    case request(Request,State) of
+		{Tag, Reply, NewState} when Tag =:= ok; Tag =:= error ->
+		    reply(From, ReplyAs, Reply),
+		    {noreply, NewState};
+		{stop, Reply, NewState} ->
+		    reply(From, ReplyAs, Reply),
+		    {stop, Reply, NewState}
+    end;
+handle_info(_Unknown, State) ->
+	{noreply, State}.
 
+terminate(_Reason, #state{fd_stream = Fd}) -> 
+	journald_api:close_fd(Fd),
+	ok.
+
+%% unused
+handle_call(_Msg, _From, State) -> {noreply, State}.
+handle_cast(_Msg, State) -> {noreply, State}.
+code_change(_,_,State) -> {ok, State}. 
+
+%% ----------------------------------------------------------------------------------------------------
+%% -- helpers
 reply(From, ReplyAs, Reply) ->
  	From ! {io_reply, ReplyAs, Reply}.
 

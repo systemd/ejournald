@@ -69,13 +69,13 @@ void close_journal_container(journal_container* jc)
 
     //case notifier not used
     if(jc->notifier_used==0){
-        sd_journal_close(jc->journal_pointer);    
+        sd_journal_close(jc->journal_pointer);
     }
     else{
             //close the notifier thread
             jc->notifier_flag=1;
                 enif_thread_join(jc->tid, NULL);
-            sd_journal_close(jc->journal_pointer);    
+            sd_journal_close(jc->journal_pointer);
     }
 }
 
