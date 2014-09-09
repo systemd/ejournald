@@ -16,7 +16,6 @@ start_link(Options) ->
 	gen_server:start_link(?MODULE, [Options], []).
 
 init(Options) ->
-	%process_flag(trap_exit, true),
 	State = evaluate_options(Options),
 	{ok, State}.
 
@@ -33,11 +32,14 @@ handle_info(_Unknown, State) ->
 	{noreply, State}.
 
 terminate(_Reason, #state{fd_stream = Fd}) -> 
-	journald_api:close_fd(Fd),
+	ok = journald_api:close_fd(Fd),
 	ok.
 
-%% unused
+handle_call({terminate, Reason}, _From, State) ->
+	{stop, Reason, ok, State};
 handle_call(_Msg, _From, State) -> {noreply, State}.
+
+%% unused
 handle_cast(_Msg, State) -> {noreply, State}.
 code_change(_,_,State) -> {ok, State}. 
 

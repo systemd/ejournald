@@ -28,15 +28,15 @@ start(Mod, Name, Options) ->
 stop(Name) when is_atom(Name) ->
     case whereis(Name) of
         Pid when is_pid(Pid) -> 
-        	ok = supervisor:terminate_child(?MODULE, Name),
+        	ok = gen_server:call(Name, {terminate, normal}),
     		supervisor:delete_child(?MODULE, Name);
         _ -> 
         	ok
     end;
 stop(Pid) when is_pid(Pid) -> 
-    ok = supervisor:terminate_child(?MODULE, Pid);
+    ok = gen_server:call(Pid, {terminate, normal});
 stop(Name) ->
-    ok = supervisor:terminate_child(?MODULE, Name),
+    ok = gen_server:call(Name, {terminate, normal}),
     supervisor:delete_child(?MODULE, Name).
 
 %% ----------------------------------------------------------------------------------------------------

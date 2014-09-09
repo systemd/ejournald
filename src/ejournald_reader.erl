@@ -35,7 +35,6 @@ start_link(Options) ->
 	gen_server:start_link(?MODULE, [Options], []).
 
 init(_Options) ->
-	%process_flag(trap_exit, true),
 	{ok, Fd} = journald_api:open(),
 	Notifier = #notifier{active = false, user_pids = []},
     State = #state{fd = Fd, direction = top, time_frame = #time_frame{}, notifier = Notifier},
@@ -54,6 +53,8 @@ handle_call(last_entry_cursor, _From, State) ->
 handle_call({flush_logs, Options}, _From, State) ->
 	ResultAndMeta = flush_logs(Options, State),
 	{reply, ResultAndMeta, State};
+handle_call({terminate, Reason}, _From, State) ->
+	{stop, Reason, ok, State};
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
@@ -66,7 +67,7 @@ handle_info(_Msg, State) ->
 
 terminate(_Reason, State = #state{fd = Fd, notifier = Notifier}) -> 
 	[ unregister_notifier(Pid, State) || Pid <- Notifier#notifier.user_pids ],
-	ok = journald_api:close(Fd),
+	%ok = journald_api:close(Fd),
 	ok.
 
 %% unused
@@ -283,11 +284,11 @@ register_notifier(Pid, State = #state{fd = Fd, notifier = Notifier}) ->
 	State#state{notifier = NewNotifier}.
 
 unregister_notifier(Pid, State = #state{fd = Fd, notifier = Notifier}) ->
-	#notifier{active = Active, user_pids = Pids} = Notifier,
+	#notifier{user_pids = Pids} = Notifier,
 	NewPids = lists:delete(Pid, Pids),
 	case NewPids of
 		[] -> 
-			ok = journald_api:close_notifier(Fd),
+			journald_api:close_notifier(Fd),
 			NewActive = false;
 		_NotEmpty ->
 			NewActive = true
