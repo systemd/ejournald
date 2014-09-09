@@ -5,10 +5,10 @@
 
 -export([init/1]).
 -export([start_link/0,
-		 start/2,
-		 start/3,
-		 stop/1
-		]).
+         start/2,
+         start/3,
+         stop/1
+        ]).
 
 start_link() ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
@@ -28,10 +28,10 @@ start(Mod, Name, Options) ->
 stop(Name) when is_atom(Name) ->
     case whereis(Name) of
         Pid when is_pid(Pid) -> 
-        	ok = gen_server:call(Name, {terminate, normal}),
-    		supervisor:delete_child(?MODULE, Name);
+            ok = gen_server:call(Name, {terminate, normal}),
+            supervisor:delete_child(?MODULE, Name);
         _ -> 
-        	ok
+            ok
     end;
 stop(Pid) when is_pid(Pid) -> 
     ok = gen_server:call(Pid, {terminate, normal});
@@ -47,7 +47,7 @@ init(_Arg) ->
 %% ----------------------------------------------------------------------------------------------------
 %% -- helpers
 child_spec(Mod, Options) ->
-	child_spec(make_ref(), Mod, Options).
+    child_spec(make_ref(), Mod, Options).
 child_spec(Name, Mod, Options) ->
     {   Name,
         {Mod, start_link, [Options]},

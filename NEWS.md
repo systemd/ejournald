@@ -1,7 +1,14 @@
 ejournald
 =========
 
-Ejournald is a journald binding for Erlang.
+Ejournald is a Erlang interface for journald.
+
+Version 2.0 - 09 Sep 2014
+---------------------------
+
+* added high-level API to read journal logs
+* added I/O-server for stream-like writing
+* moved type checking from NIFs to erlang 
 
 Version 1.3.0 - 7 Feb 2014
 ---------------------------
