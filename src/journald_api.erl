@@ -1,4 +1,4 @@
-% Copyright 2010-2013, Travelping GmbH <info@travelping.com>
+% Copyright 2010-2014, Travelping GmbH <info@travelping.com>
 
 % Permission is hereby granted, free of charge, to any person obtaining a
 % copy of this software and associated documentation files (the "Software"),
