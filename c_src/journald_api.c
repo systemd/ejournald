@@ -68,7 +68,7 @@ void close_journal_container(journal_container* jc)
 {
 
     //case notifier not used
-    if(jc->notifier_used==0){
+    if (jc->notifier_used==0){
         sd_journal_close(jc->journal_pointer);
     }
     else{
@@ -141,21 +141,16 @@ static ERL_NIF_TERM nif_stream_fd(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
 {
     int priority = -1, level_prefix = -1;
     int *fd;
-    unsigned int len=0;
-    char* syslog_id;
+    ErlNifBinary syslog_id;
         
     fd = enif_alloc_resource(file_descriptor, sizeof(int));
 
-    enif_get_list_length(env,argv[0],&len);
-    enif_get_int(env, argv[1], &priority); 
-    enif_get_int(env, argv[2], &level_prefix);  // binary conversion 
+    if (!enif_inspect_binary(env, argv[0], &syslog_id)
+        || !enif_get_int(env, argv[1], &priority)
+        || !enif_get_int(env, argv[2], &level_prefix))
+        return enif_make_badarg(env);
 
-    len++;
-    syslog_id = alloca(len);
-        
-    enif_get_string(env, argv[0], syslog_id, len, ERL_NIF_LATIN1);
-        
-    *fd = sd_journal_stream_fd(syslog_id, priority, level_prefix);
+    *fd = sd_journal_stream_fd((char*) &syslog_id, priority, level_prefix);
     if (*fd < 0)
         return atom_error;
 
@@ -170,12 +165,11 @@ static ERL_NIF_TERM nif_write_fd(ErlNifEnv* env, int argc, const ERL_NIF_TERM ar
     int *fd;
     ErlNifBinary msg;
     
-    if(!enif_get_resource(env, argv[0], file_descriptor, (void**) &fd))
-        return enif_make_badarg(env);
-    if(!enif_inspect_iolist_as_binary(env, argv[1], &msg))
+    if (!enif_get_resource(env, argv[0], file_descriptor, (void**) &fd)
+        || !enif_inspect_iolist_as_binary(env, argv[1], &msg))
         return enif_make_badarg(env);
     
-    if(write(*fd, msg.data, msg.size) < 0)
+    if (write(*fd, msg.data, msg.size) < 0)
         return atom_error;
     
     return atom_ok;
@@ -185,9 +179,9 @@ static ERL_NIF_TERM nif_close_fd(ErlNifEnv* env, int argc, const ERL_NIF_TERM ar
 {
     int *fd;
 
-    if(!enif_get_resource(env, argv[0], file_descriptor, (void**) &fd))
+    if (!enif_get_resource(env, argv[0], file_descriptor, (void**) &fd))
         return enif_make_badarg(env);
-    if(close(*fd) < 0)
+    if (close(*fd) < 0)
         return atom_error;
     
     return atom_ok;
@@ -494,7 +488,7 @@ static ERL_NIF_TERM nif_enumerate_unique(ErlNifEnv* env, int argc, const ERL_NIF
     size_t l;
 
     r = sd_journal_enumerate_unique(jc->journal_pointer, (void *) &d, &l);
-    if( r < 0) return enif_make_tuple2(env, atom_error, enif_make_string(env,"enumerating failed",ERL_NIF_LATIN1));
+    if ( r < 0) return enif_make_tuple2(env, atom_error, enif_make_string(env,"enumerating failed",ERL_NIF_LATIN1));
     else if (r == 0) return atom_eaddrnotavail;
  
     ERL_NIF_TERM term = enif_make_string_len(env, d , l, ERL_NIF_LATIN1);
@@ -524,7 +518,7 @@ static ERL_NIF_TERM nif_enumerate_data(ErlNifEnv* env, int argc, const ERL_NIF_T
     size_t l;
 
     r = sd_journal_enumerate_data(jc->journal_pointer, (void *) &d, &l);
-    if( r < 0) 
+    if ( r < 0) 
         return return_error(env, "failed_to_enumerate");
     else if (r == 0) 
         return atom_eaddrnotavail;
@@ -554,7 +548,7 @@ static void * notifier_run(void *arg){
     changes = sd_journal_wait(jc->journal_pointer, (uint64_t) 1000);
     while(1){
 
-        if( jc->notifier_flag == 1 ){
+        if ( jc->notifier_flag == 1 ){
             jc->notifier_flag = 0; 
             enif_thread_exit(NULL);
         }
@@ -563,17 +557,17 @@ static void * notifier_run(void *arg){
         changes = sd_journal_wait(jc->journal_pointer, (uint64_t) 1000);
 
         //new entry appended at the end of the journal
-        if( changes == SD_JOURNAL_APPEND ){
+        if ( changes == SD_JOURNAL_APPEND ){
             t_env = enif_alloc_env();
-            if(!enif_send(NULL, &(jc->pid), t_env, enif_make_atom(t_env, "journal_append"))){
+            if (!enif_send(NULL, &(jc->pid), t_env, enif_make_atom(t_env, "journal_append"))){
                 enif_thread_exit(NULL);
                 enif_clear_env(t_env);
             }
         }
         //journal files were added or removed
-        else if( changes == SD_JOURNAL_INVALIDATE ){
+        else if ( changes == SD_JOURNAL_INVALIDATE ){
             t_env = enif_alloc_env();
-            if(!enif_send(NULL, &(jc->pid), t_env, enif_make_atom(t_env, "journal_invalidate"))){
+            if (!enif_send(NULL, &(jc->pid), t_env, enif_make_atom(t_env, "journal_invalidate"))){
                 enif_thread_exit(NULL);
                 enif_clear_env(t_env);
             }
@@ -588,10 +582,10 @@ static ERL_NIF_TERM nif_open_notifier (ErlNifEnv* env, int argc, const ERL_NIF_T
     journal_container *jc;
     enif_get_resource(env, argv[0], journal_container_type, (void **) &jc);
 
-    if(jc->notifier_used == 1)
+    if (jc->notifier_used == 1)
         return return_error(env, "notifier_already_exists");
 
-    if(jc->notifier_flag==1)
+    if (jc->notifier_flag==1)
         return return_error(env, "old_notifier_not_closed_yet");
 
     ErlNifPid pid;
@@ -600,7 +594,7 @@ static ERL_NIF_TERM nif_open_notifier (ErlNifEnv* env, int argc, const ERL_NIF_T
     jc->pid = pid;
     jc->notifier_flag = 0;
         
-    if(enif_thread_create("notifier_worker", &jc->tid, notifier_run, (void *) jc, NULL) != 0)
+    if (enif_thread_create("notifier_worker", &jc->tid, notifier_run, (void *) jc, NULL) != 0)
         return return_error(env, "thread_creation_failed");
 
     jc->notifier_used = 1;
@@ -613,7 +607,7 @@ static ERL_NIF_TERM nif_close_notifier (ErlNifEnv* env, int argc, const ERL_NIF_
     journal_container *jc;
     enif_get_resource(env, argv[0], journal_container_type, (void **) &jc);
 
-    if(jc->notifier_used == 0)
+    if (jc->notifier_used == 0)
         return return_error(env, "no_notifier_available");
 
     //setting the notifier flag will close the notifier thread
@@ -632,7 +626,7 @@ static ERL_NIF_TERM nif_get_realtime_usec (ErlNifEnv *env, int argc, const ERL_N
     enif_get_resource(env, argv[0], journal_container_type, (void **) &jc);
 
     r = sd_journal_get_realtime_usec(jc->journal_pointer, &usec);
-    if(r < 0 ) 
+    if (r < 0 ) 
         return return_error(env, "getting_realtime_failed");
 
     return enif_make_tuple2(env, atom_ok, enif_make_uint64(env, usec)); 
@@ -648,7 +642,7 @@ static ERL_NIF_TERM nif_seek_realtime_usec (ErlNifEnv *env, int argc, const ERL_
     enif_get_uint64(env, argv[1], &usec);
 
     r = sd_journal_seek_realtime_usec(jc->journal_pointer, usec);
-    if(r < 0) 
+    if (r < 0) 
         return return_error(env, "seeking_realtime_failed");
     
     return atom_ok;
