@@ -136,9 +136,9 @@ get_fields(Fd, Akk) ->
 next_msg(State = #state{fd = Fd}) ->
     case move(next, State) of
         ok -> 
-            case journald_api:get_data(Fd, "MESSAGE") of
+            case journald_api:get_data(Fd, <<"MESSAGE\0">>) of
                 {ok, PrefixedData} -> 
-                    Data = lists:sublist(PrefixedData, 9, length(PrefixedData)),
+                    [_, Data] = binary:split(PrefixedData, [<<"=">>]),
                     {Timestamp, Priority} = get_meta_info(Fd),
                     {Timestamp, Priority, Data};
                 Error -> Error
@@ -156,9 +156,9 @@ get_last_entry_cursor(#state{fd = Fd}) ->
 get_meta_info(Fd) ->
     {ok, UnixTimestamp} = journald_api:get_realtime_usec(Fd),
     Timestamp = unix_seconds_to_datetime(UnixTimestamp),
-    {ok, PriorityString} = journald_api:get_data(Fd, "PRIORITY"),
-    PriorityInt = list_to_integer(lists:sublist(PriorityString, 10, length(PriorityString))),
-    {Priority, _ } = lists:keyfind(PriorityInt, 2, ?LOG_LVLS),
+    {ok, PriorityBin} = journald_api:get_data(Fd, <<"PRIORITY\0">>),
+    [_, PriorityBinInt] = binary:split(PriorityBin, [<<"=">>]),
+    {Priority, _ } = lists:keyfind(binary_to_integer(PriorityBinInt), 2, ?LOG_LVLS),
     {Timestamp, Priority}.
 
 %% ------------------------------------------------------------------------
@@ -203,7 +203,7 @@ seek_timestamp(DateTime, #state{fd = Fd}) ->
     ok = journald_api:seek_realtime_usec(Fd, Time),
     case journald_api:next(Fd) of
         ok -> ok;
-        eaddrnotavail ->
+        no_more ->
             journald_api:seek_tail(Fd),
             journald_api:previous(Fd)
     end,
@@ -211,7 +211,7 @@ seek_timestamp(DateTime, #state{fd = Fd}) ->
     ok = journald_api:seek_realtime_usec(Fd, Time),
     case journald_api:previous(Fd) of
         ok -> ok;
-        eaddrnotavail ->
+        no_more ->
             journald_api:seek_head(Fd),
             journald_api:next(Fd)
     end,
@@ -231,21 +231,25 @@ reset_matches(Options, #state{fd = Fd}) ->
     LogLvl = proplists:get_value(log_level, Options, info),
     journald_api:flush_matches(Fd),
     LogLvlInt = proplists:get_value(LogLvl, ?LOG_LVLS),
-    [ journald_api:add_match(Fd, "PRIORITY=" ++ integer_to_list(Lvl)) || Lvl <- lists:seq(0, LogLvlInt) ],
+    BinaryLogLvls = [ integer_to_binary(Lvl) || Lvl <- lists:seq(0, LogLvlInt) ],
+    Priority = <<"PRIORITY=">>,
+    [ journald_api:add_match(Fd, <<Priority/binary, Lvl/binary>>) || Lvl <- BinaryLogLvls ],
     ErlNode = proplists:get_value(erl_node, Options, undefined),
     ErlApp = proplists:get_value(erl_app, Options, undefined),
     ErlMod = proplists:get_value(erl_mod, Options, undefined),
     ErlFun = proplists:get_value(erl_fun, Options, undefined),
-    add_conjunction(Fd, "ERLANG_NODE", ErlNode),
-    add_conjunction(Fd, "SYSLOG_IDENTIFIER", ErlApp),
-    add_conjunction(Fd, "CODE_FILE", ErlMod),
-    add_conjunction(Fd, "CODE_FUNC", ErlFun).
+    add_conjunction(Fd, <<"ERLANG_NODE=">>, ErlNode),
+    add_conjunction(Fd, <<"SYSLOG_IDENTIFIER=">>, ErlApp),
+    add_conjunction(Fd, <<"CODE_FILE=">>, ErlMod),
+    add_conjunction(Fd, <<"CODE_FUNC=">>, ErlFun).
 
 add_conjunction(_Fd, _Field, undefined) ->
     ok;
 add_conjunction(Fd, Field, Value) ->
+    Value1 = atom_to_binary(Value, latin1),
     ok = journald_api:add_conjunction(Fd),
-    ok = journald_api:add_match(Fd, Field ++ "=" ++ atom_to_list(Value)).
+    Null = <<"\0">>,
+    ok = journald_api:add_match(Fd, <<Field/binary, Value1/binary, Null/binary>>).
 
 datetime_to_unix_seconds(DateTime) ->
     DateTimeInSecs = calendar:datetime_to_gregorian_seconds(DateTime),
@@ -270,7 +274,7 @@ move(Pos, #state{fd = Fd, direction = Dir, time_frame = TimeFrame}) ->
             case Dir of 
                 bot when Cursor2 /= undefined -> 
                     case journald_api:test_cursor(Fd, Cursor2) of
-                        ok -> eaddrnotavail;
+                        ok -> no_more;
                         _ ->
                             move1(Fd, next)
                     end;
@@ -278,7 +282,7 @@ move(Pos, #state{fd = Fd, direction = Dir, time_frame = TimeFrame}) ->
                     move1(Fd, next);
                 top when Cursor1 /= undefined -> 
                     case journald_api:test_cursor(Fd, Cursor1) of
-                        ok -> eaddrnotavail;
+                        ok -> no_more;
                         _ ->
                             move1(Fd, previous)
                     end;
@@ -364,7 +368,7 @@ collect_logs(Call, Counter, State, Akk) ->
             Result = next_msg(State)
     end,
     case Result of
-        eaddrnotavail -> lists:reverse(Akk);
+        no_more -> lists:reverse(Akk);
         Log when Counter =:= undefined ->
             collect_logs(Call, Counter, State, [Log | Akk]);
         Log when is_number(Counter) ->

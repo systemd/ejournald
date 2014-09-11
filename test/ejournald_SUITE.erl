@@ -33,7 +33,7 @@
 %% ----------------------------------------------------------------------------------------------------
 %% -- testcases CONTROL
 start_stop_io(_Config) ->
-    {ok, _Pid} = ejournald:start_io(test_io, [{name, "test_io"}]),
+    {ok, _Pid} = ejournald:start_io(test_io, [{name, <<"test_io">>}]),
     ok = ejournald:stop_io(test_io).
 
 start_stop_reader(_Config) ->
@@ -65,12 +65,12 @@ io_fwrite(_Config) ->
 %% -- testcases READING
 read_last_3_logs(_Config) ->
     Logs = ejournald:get_logs([{direction, top}, {at_most, 3}]),
-    [ [ ct:log(Field) || Field <- Log ++ ["~n"] ] || {_Timestamp, _Priority, Log} <- Logs ],
+    [ [ ct:log(binary_to_list(Field)) || Field <- Log ++ [<<"~n">>] ] || {_Timestamp, _Priority, Log} <- Logs ],
     ok.
 
 read_last_3_messages(_Config) ->
     Logs = ejournald:get_logs([{direction, top}, {at_most, 3}, {message, true}]),
-    [ ct:log(Log) || {_Timestamp, _Priority, Log} <- Logs ],
+    [ ct:log(binary_to_list(Log)) || {_Timestamp, _Priority, Log} <- Logs ],
     ok.
 
 read_since(_Config) ->
@@ -78,7 +78,7 @@ read_since(_Config) ->
     {Date, {H, M, S}} = DateTime,
     Since = {Date, {H, M-5, S}},
     Logs = ejournald:get_logs([{direction, bot}, {since, Since}, {message, true}]),
-    [ ct:log(Log) || {_Timestamp, _Priority, Log} <- Logs ],
+    [ ct:log(binary_to_list(Log)) || {_Timestamp, _Priority, Log} <- Logs ],
     ok.
 
 read_since_until(_Config) -> %% don't try this test around midnight ;) (the days could swap in a bad way)
@@ -87,7 +87,7 @@ read_since_until(_Config) -> %% don't try this test around midnight ;) (the days
     Since = {Date, {mod(H-1, 24), mod(M-10, 60), S}},
     Until = {Date, {mod(H-1, 24), mod(M-5, 60), S}},
     Logs = ejournald:get_logs([{direction, top}, {at_most, 10}, {since, Since}, {until, Until}, {message, true}]),
-    [ ct:log(Log) || {_Timestamp, _Priority, Log} <- Logs ],
+    [ ct:log(binary_to_list(Log)) || {_Timestamp, _Priority, Log} <- Logs ],
     ok.
 
 notify(_Config) ->
@@ -120,7 +120,7 @@ receive_flush(0) -> ok;
 receive_flush(N) ->
     receive
         {_Timestamp, _Priority, Log} -> 
-            ct:log(Log),
+            ct:log(binary_to_list(Log)),
             receive_flush(N-1)
     after
         500 ->
