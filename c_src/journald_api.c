@@ -33,8 +33,6 @@
 #include <unistd.h>
 #include <stdio.h>
 
-static ErlNifResourceType *file_descriptor = NULL;
-
 //A pointer to the head of the journal will be stored in journal_container.
 //journal_container_type is just the ErlNifResourceType for journal_container 
 //to allocate it later in "open" as this type.
@@ -56,12 +54,6 @@ static ERL_NIF_TERM atom_eaddrnotavail;
 static ERL_NIF_TERM return_error(ErlNifEnv* env, const char* reason)
 {
     return enif_make_tuple2(env, atom_error, enif_make_atom(env, reason));
-}
-
-void dtor_fd(ErlNifEnv* env, void* obj)
-{
-    int* fd = (int*) obj;
-    close(*fd); 
 }
 
 void close_journal_container(journal_container* jc)
@@ -87,10 +79,6 @@ void dtor_jc(ErlNifEnv* env, void* obj)
 
 static int load(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info)
 {
-    ErlNifResourceType *fd = enif_open_resource_type(env, NULL, "int", dtor_fd, ERL_NIF_RT_CREATE, NULL);
-    if (fd == NULL) return -1;
-    file_descriptor = fd;
-
     ErlNifResourceType *rt = enif_open_resource_type(env, NULL, "journal_container_type", dtor_jc, ERL_NIF_RT_CREATE, NULL);
     if (rt == NULL)    return -1;
     journal_container_type = rt;
@@ -140,36 +128,33 @@ static ERL_NIF_TERM nif_sendv(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
 static ERL_NIF_TERM nif_stream_fd(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) 
 {
     int priority = -1, level_prefix = -1;
-    int *fd;
+    int fd;
     ErlNifBinary syslog_id;
         
-    fd = enif_alloc_resource(file_descriptor, sizeof(int));
-
     if (!enif_inspect_binary(env, argv[0], &syslog_id)
         || !enif_get_int(env, argv[1], &priority)
         || !enif_get_int(env, argv[2], &level_prefix))
         return enif_make_badarg(env);
 
-    *fd = sd_journal_stream_fd((char*) &syslog_id, priority, level_prefix);
-    if (*fd < 0)
+    fd = sd_journal_stream_fd((char*) &syslog_id, priority, level_prefix);
+    if (fd < 0)
         return atom_error;
 
-    ERL_NIF_TERM nif_fd = enif_make_resource(env, fd);
-    enif_release_resource(fd);
+    ERL_NIF_TERM nif_fd = enif_make_int(env, fd);
 
     return nif_fd; 
 }
 
 static ERL_NIF_TERM nif_write_fd(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
-    int *fd;
+    int fd;
     ErlNifBinary msg;
     
-    if (!enif_get_resource(env, argv[0], file_descriptor, (void**) &fd)
+    if (!enif_get_int(env, argv[0], (void*) &fd)
         || !enif_inspect_iolist_as_binary(env, argv[1], &msg))
         return enif_make_badarg(env);
     
-    if (write(*fd, msg.data, msg.size) < 0)
+    if (write(fd, msg.data, msg.size) < 0)
         return atom_error;
     
     return atom_ok;
@@ -177,11 +162,11 @@ static ERL_NIF_TERM nif_write_fd(ErlNifEnv* env, int argc, const ERL_NIF_TERM ar
 
 static ERL_NIF_TERM nif_close_fd(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
-    int *fd;
+    int fd;
 
-    if (!enif_get_resource(env, argv[0], file_descriptor, (void**) &fd))
+    if (!enif_get_int(env, argv[0], (void*) &fd))
         return enif_make_badarg(env);
-    if (close(*fd) < 0)
+    if (close(fd) < 0)
         return atom_error;
     
     return atom_ok;
