@@ -122,7 +122,7 @@ get_logs(Options) ->
 get_logs(Id, Options) ->
     case check_options(Options) of
         {Error, Reason} -> {Error, Reason};
-        ok              -> gen_server:call(Id, {evaluate, Options})
+        ok              -> gen_server:call(Id, {evaluate, Options}, 10000)
     end.
     
 %% @doc See log_notify/3.
