@@ -27,7 +27,7 @@
 -export([sendv/1, stream_fd/3, write_fd/2, close_fd/1,
         open/0, open_directory/1, close/1, next/1, 
         previous/1, get_data/2, add_match/2,  
-        add_disjunction/1, flush_matches/1, seek_head/1, seek_tail/1,  
+        add_disjunction/1, add_conjunction/1, flush_matches/1, seek_head/1, seek_tail/1,  
         get_cursor/1, test_cursor/2, seek_cursor/2, query_unique/2,
         enumerate_unique/1, restart_unique/1, open_notifier/2,
         enumerate_data/1, restart_data/1, close_notifier/1,
@@ -56,6 +56,7 @@ previous(_Arg) -> ?nif_stub.
 get_data(_Arg1, _Arg2) -> ?nif_stub. 
 add_match(_Arg1, _Arg2) -> ?nif_stub. 
 add_disjunction(_Arg) -> ?nif_stub. 
+add_conjunction(_Arg) -> ?nif_stub. 
 flush_matches(_Arg) -> ?nif_stub. 
 seek_head(_Arg) -> ?nif_stub. 
 seek_tail(_Arg) -> ?nif_stub. 

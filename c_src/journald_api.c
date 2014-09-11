@@ -374,20 +374,18 @@ static ERL_NIF_TERM nif_add_disjunction(ErlNifEnv* env, int argc, const ERL_NIF_
     return atom_ok;
 }
 
-// not supported for now
-//static ERL_NIF_TERM nif_add_conjunction(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-//
-//    journal_container *jc;
-//
-//    if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
-//        return enif_make_badarg(env);
-//        
-//    int r = sd_journal_add_conjunction(jc->journal_pointer);    
-//    if (r < 0)
-//        return return_error(env, "failed_to_add_conjunction");
-//
-//    return atom_ok;
-//}
+static ERL_NIF_TERM nif_add_conjunction(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+
+    journal_container *jc;
+
+    enif_get_resource(env, argv[0], journal_container_type, (void **) &jc);
+        
+    int r = sd_journal_add_conjunction(jc->journal_pointer);    
+    if (r < 0)
+        return return_error(env, "failed_to_add_conjunction");
+
+    return atom_ok;
+}
 
 static ERL_NIF_TERM nif_seek_head(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 
@@ -671,7 +669,7 @@ static ErlNifFunc nif_funcs[] =
     {"get_data", 2, nif_get_data},
     {"add_match", 2, nif_add_match},
     {"add_disjunction", 1, nif_add_disjunction},
-//    {"add_conjunction", 1, nif_add_conjunction},
+    {"add_conjunction", 1, nif_add_conjunction},
     {"flush_matches", 1, nif_flush_matches},
     {"seek_head", 1, nif_seek_head},
     {"seek_tail", 1, nif_seek_tail},

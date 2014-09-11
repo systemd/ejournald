@@ -43,21 +43,30 @@
                             notice | 
                             info |
                             debug.
+
+-type erl_opts()        ::  erl_node |
+                            erl_app |
+                            erl_mod |
+                            erl_fun.
                             
 -type io_options()      ::  {name, string()} |
                             {log_level, log_level()} |
                             {level_prefix, string()}.
 
--type direction()       ::  bot | top.
--type datetime1970()    ::  calendar:datetime1970().
 -type log_options()     ::  {direction, direction()} |
                             {since, datetime1970()} |
                             {until, datetime1970()} |
                             {at_most, integer()} |
                             {log_level, log_level()} |
-                            {message, boolean()}.
--type notify_options()  ::  {message, boolean() |
-                            {log_level, log_level()}}.
+                            {message, boolean()} |
+                            {erl_opts(), atom()}.
+
+-type notify_options()  ::  {message, boolean()} |
+                            {log_level, log_level()} |
+                            {erl_opts(), atom()}.
+
+-type direction()       ::  bot | top.
+-type datetime1970()    ::  calendar:datetime1970().
 -type sink_fun()        ::  fun( (log_message()) -> any() ).
 -type sink()            ::  pid() | sink_fun().
 -type log_data()        ::  string() | [ string() ]. %% depends on the 'message' option
@@ -212,6 +221,9 @@ check_options([{log_level, LogLevel} | RestOpts]) when is_atom(LogLevel) ->
         false   -> {badarg, {invalid_log_level, LogLevel}}
     end;
 check_options([{message, Message} | RestOpts]) when Message=:=true;Message=:=false -> 
+    check_options(RestOpts);
+check_options([{ErlOpt, Value} | RestOpts]) 
+    when ErlOpt=:=erl_app;ErlOpt=:=erl_mod;ErlOpt=:=erl_fun;ErlOpt=:=erl_node,is_atom(Value) -> 
     check_options(RestOpts);
 check_options([ Arg | _RestOpts]) -> 
     {badarg, Arg}.

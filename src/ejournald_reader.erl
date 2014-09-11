@@ -231,7 +231,21 @@ reset_matches(Options, #state{fd = Fd}) ->
     LogLvl = proplists:get_value(log_level, Options, info),
     journald_api:flush_matches(Fd),
     LogLvlInt = proplists:get_value(LogLvl, ?LOG_LVLS),
-    [ journald_api:add_match(Fd, "PRIORITY=" ++ integer_to_list(Lvl)) || Lvl <- lists:seq(0, LogLvlInt) ].
+    [ journald_api:add_match(Fd, "PRIORITY=" ++ integer_to_list(Lvl)) || Lvl <- lists:seq(0, LogLvlInt) ],
+    ErlNode = proplists:get_value(erl_node, Options, undefined),
+    ErlApp = proplists:get_value(erl_app, Options, undefined),
+    ErlMod = proplists:get_value(erl_mod, Options, undefined),
+    ErlFun = proplists:get_value(erl_fun, Options, undefined),
+    add_conjunction(Fd, "ERLANG_NODE", ErlNode),
+    add_conjunction(Fd, "SYSLOG_IDENTIFIER", ErlApp),
+    add_conjunction(Fd, "CODE_FILE", ErlMod),
+    add_conjunction(Fd, "CODE_FUNC", ErlFun).
+
+add_conjunction(_Fd, _Field, undefined) ->
+    ok;
+add_conjunction(Fd, Field, Value) ->
+    ok = journald_api:add_conjunction(Fd),
+    ok = journald_api:add_match(Fd, Field ++ "=" ++ atom_to_list(Value)).
 
 datetime_to_unix_seconds(DateTime) ->
     DateTimeInSecs = calendar:datetime_to_gregorian_seconds(DateTime),
