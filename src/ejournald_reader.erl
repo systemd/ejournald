@@ -117,7 +117,8 @@ next_msg(State = #state{fd = Fd}) ->
     case move(next, State) of
         ok -> 
             case journald_api:get_data(Fd, "MESSAGE") of
-                {ok, Data} -> 
+                {ok, PrefixedData} -> 
+                    Data = lists:sublist(PrefixedData, 9, length(PrefixedData)),
                     {Timestamp, Priority} = get_meta_info(Fd),
                     {Timestamp, Priority, Data};
                 Error -> Error

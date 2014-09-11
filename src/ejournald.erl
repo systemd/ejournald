@@ -36,7 +36,8 @@
                             {at_most, integer()} |
                             {log_level, log_level()} |
                             {message, boolean()}.
--type notify_options()  ::  {message, boolean()}.
+-type notify_options()  ::  {message, boolean() |
+                            {log_level, log_level()}}.
 -type sink_fun()        ::  fun( (log_message()) -> any() ).
 -type sink()            ::  pid() | sink_fun().
 -type log_data()        ::  string() | [ string() ]. %% depends on the 'message' option
