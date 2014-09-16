@@ -23,7 +23,7 @@
 -behaviour(gen_server).
 
 -export([init/1, handle_cast/2, handle_call/3, handle_info/2, terminate/2, code_change/3]).
--export([start_link/1]).
+-export([start_link/2]).
 
 -include("internal.hrl").
 
@@ -39,8 +39,10 @@
 
 %% ----------------------------------------------------------------------------------------------------
 %% -- gen_server callbacks
-start_link(Options) ->
-    gen_server:start_link(?MODULE, [Options], []).
+start_link(undefined, Options) ->
+    gen_server:start_link(?MODULE, [Options], []);
+start_link(Name, Options) ->
+    gen_server:start_link({local, Name}, ?MODULE, [Options], []).
 
 init(_Options) ->
     {ok, Ctx} = journald_api:open(),
@@ -68,9 +70,9 @@ code_change(_,_,State) -> {ok, State}.
 %% -- evaluate options for log retrieval
 evaluate_log_options(Options, State = #state{ctx = Ctx}) ->
     Dir = proplists:get_value(direction, Options, descending),
-    AtMost = proplists:get_value(at_most, Options, undefined),
-    Since = proplists:get_value(since, Options, undefined),
-    Until = proplists:get_value(until, Options, undefined),
+    AtMost = proplists:get_value(at_most, Options),
+    Since = proplists:get_value(since, Options),
+    Until = proplists:get_value(until, Options),
     Msg = proplists:get_value(message, Options, false),
     State1 = State#state{direction = Dir},
     State2 = reset_timeframe(Since, Until, State1),

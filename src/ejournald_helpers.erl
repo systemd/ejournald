@@ -37,22 +37,17 @@ reset_matches(Options, Ctx) ->
     BinaryLogLvls = [ integer_to_binary(Lvl) || Lvl <- lists:seq(0, LogLvlInt) ],
     Priority = <<"PRIORITY=">>,
     [ journald_api:add_match(Ctx, <<Priority/binary, Lvl/binary>>) || Lvl <- BinaryLogLvls ],
-    ErlNode = proplists:get_value(erl_node, Options, undefined),
-    ErlApp = proplists:get_value(erl_app, Options, undefined),
-    ErlMod = proplists:get_value(erl_mod, Options, undefined),
-    ErlFun = proplists:get_value(erl_fun, Options, undefined),
-    add_conjunction(Ctx, <<"ERLANG_NODE=">>, ErlNode),
-    add_conjunction(Ctx, <<"SYSLOG_IDENTIFIER=">>, ErlApp),
-    add_conjunction(Ctx, <<"CODE_FILE=">>, ErlMod),
-    add_conjunction(Ctx, <<"CODE_FUNC=">>, ErlFun).
+    add_conjunction(Ctx, <<"ERLANG_NODE=">>, proplists:get_value(erl_node, Options)),
+    add_conjunction(Ctx, <<"SYSLOG_IDENTIFIER=">>, proplists:get_value(erl_app, Options)),
+    add_conjunction(Ctx, <<"CODE_FILE=">>, proplists:get_value(erl_mod, Options)),
+    add_conjunction(Ctx, <<"CODE_FUNC=">>, proplists:get_value(erl_fun, Options)).
 
 add_conjunction(_Ctx, _Field, undefined) ->
     ok;
 add_conjunction(Ctx, Field, Value) ->
     Value1 = atom_to_binary(Value, latin1),
     ok = journald_api:add_conjunction(Ctx),
-    Null = <<"\0">>,
-    ok = journald_api:add_match(Ctx, <<Field/binary, Value1/binary, Null/binary>>).
+    ok = journald_api:add_match(Ctx, <<Field/binary, Value1/binary, "\0">>).
 
 datetime_to_unix_seconds(DateTime) ->
     DateTimeInSecs = calendar:datetime_to_gregorian_seconds(DateTime),

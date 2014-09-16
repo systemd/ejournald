@@ -41,9 +41,7 @@ start(Mod, Options) ->
 
 start(Mod, Name, Options) ->
     ChildSpec = child_spec(Name, Mod, Options),
-    {ok, Pid} = supervisor:start_child(?MODULE, ChildSpec),
-    register(Name, Pid),
-    {ok, Pid}.
+    supervisor:start_child(?MODULE, ChildSpec).
 
 stop(Name) when is_atom(Name) ->
     case whereis(Name) of
@@ -67,10 +65,10 @@ init(_Arg) ->
 %% ----------------------------------------------------------------------------------------------------
 %% -- helpers
 child_spec(Mod, Options) ->
-    child_spec(make_ref(), Mod, Options).
+    child_spec(undefined, Mod, Options).
 child_spec(Name, Mod, Options) ->
     {   Name,
-        {Mod, start_link, [Options]},
+        {Mod, start_link, [Name, Options]},
         transient,
         infinity,
         worker,

@@ -2,7 +2,7 @@
 {application, ejournald, [
     {description, "erlang interface to journald"},
     {applications, [kernel, stdlib]},
-    {vsn, git},
+    {vsn, "2.0"},
     {registered, [ejournald_sup]},
     {mod, {ejournald, []}}
 ]}.

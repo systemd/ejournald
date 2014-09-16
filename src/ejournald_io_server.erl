@@ -22,7 +22,7 @@
 -module(ejournald_io_server).
 -behaviour(gen_server).
 
--export([start_link/1]).
+-export([start_link/2]).
 -export([init/1, handle_cast/2, handle_call/3, handle_info/2, terminate/2, code_change/3]).
 
 -record(state, {
@@ -32,8 +32,10 @@
 
 %% ----------------------------------------------------------------------------------------------------
 %% -- gen_server callbacks
-start_link(Options) ->
-    gen_server:start_link(?MODULE, Options, []).
+start_link(undefined, Options) ->
+    gen_server:start_link(?MODULE, Options, []);
+start_link(Name, Options) ->
+    gen_server:start_link({local, Name}, ?MODULE, Options, []).
 
 init(Options) ->
     State = evaluate_options(Options),
