@@ -21,17 +21,18 @@
 -module(ejournald).
 -behaviour(application).
 
+-include("internal.hrl").
+
 -export([start/2, stop/1]).
 -export([start_io/1, start_io/2, stop_io/1,
          start_reader/0, start_reader/1, stop_reader/1,
          get_logs/1, get_logs/2
         ]).
--export([log_notify/2, log_notify/3,
-         log_notify_starter/3
-        ]).
+-export([log_notify/2, stop_log_notify/1]).
 
 -define(READER, ejournald_reader).
 -define(IO_SERVER, ejournald_io_server).
+-define(NOTIFIER, ejournald_notifier).
 
 %% ----------------------------------------------------------------------------------------------------
 %% -- types
@@ -70,7 +71,7 @@
 -type sink_fun()        ::  fun( (log_message()) -> any() ).
 -type sink()            ::  pid() | sink_fun().
 -type log_data()        ::  string() | [ string() ]. %% depends on the 'message' option
--type log_message()     ::  {datetime1970(), log_level(), log_data()} | journal_changed.
+-type log_message()     ::  {datetime1970(), log_level(), log_data()} | journal_invalidate.
 -type id()              ::  term() | pid().
 
 %% ----------------------------------------------------------------------------------------------------
@@ -135,74 +136,29 @@ get_logs(Id, Options) ->
         ok              -> gen_server:call(Id, {evaluate, Options}, 10000)
     end.
     
-%% @doc See log_notify/3.
+%% @doc Starts a worker that monitors the journal and filters new entries. 
 -spec log_notify(sink(), [notify_options()] ) -> {ok, pid()} | {error, any()}.
 log_notify(Sink, Options) when is_pid(Sink);is_function(Sink,1) ->
-    log_notify(?READER, Sink, Options).
-
-%% @doc Starts a worker that monitors the journal and filters new entries. 
--spec log_notify(id(), sink(), [notify_options()] ) -> {ok, pid()} | {error, any()}.
-log_notify(Id, Sink, Options) when is_pid(Sink);is_function(Sink,1) ->
     case check_options(Options) of
         {Error, Reason} -> {Error, Reason};
-        ok              -> evaluate_options_notify(Id, Sink, Options)
+        ok              -> evaluate_options_notify(Sink, Options)
     end.
 
+%% @doc Stops the worker.
+-spec stop_log_notify( pid() ) -> ok | {error, any()}.
+stop_log_notify(Pid) ->
+    ejournald_sup:stop(Pid).
 %% ----------------------------------------------------------------------------------------------------
 %% -- helpers
 %% @private
-evaluate_options_notify(Id, Sink, Options) -> 
+evaluate_options_notify(Sink, Options) -> 
     case Sink of
-        undefined -> erlang:error(badarg, {error, no_sink});
-        _Sink -> ok
-    end,
-    Cursor = gen_server:call(Id, last_entry_cursor),
-    Pid = spawn(?MODULE, log_notify_starter, [Id, Sink, [ {last_entry_cursor, Cursor} | Options ]]),
-    ejournald_reader:register_notifier(Id, Pid),
-    {ok, Pid}.
-
-%% @private
-log_notify_starter(Id, Sink, Options) when is_pid(Sink) ->
-    link(Sink),
-    process_flag(trap_exit, true),
-    log_notify_worker(Id, Sink, Options);
-log_notify_starter(Id, Sink, Options) ->
-    log_notify_worker(Id, Sink, Options).
-
-%% @private
-log_notify_worker(Id, Sink, Options) ->
-    receive 
-        journal_append ->
-            {Result, Cursor} = gen_server:call(Id, {flush_logs, Options}),
-            evaluate_sink(Sink, Result),
-            NewOptions = lists:keyreplace(last_entry_cursor, 1, Options, {last_entry_cursor, Cursor}),
-            log_notify_worker(Id, Sink, NewOptions);
-        journal_changed ->
-            evaluate_sink(Sink, journal_changed),
-            log_notify_worker(Id, Sink, Options);
-        {'EXIT', _FromPid, _Reason} ->
-            ejournald_reader:unregister_notifier(Id, self());
-        exit ->
-            ejournald_reader:unregister_notifier(Id, self())
+        undefined -> 
+            erlang:error(badarg, {error, no_sink});
+        Sink when is_pid(Sink);is_function(Sink,1) ->
+            ejournald_sup:start(?NOTIFIER, {Sink, Options})
     end.
-
-%% @private
-evaluate_sink(Sink, journal_changed) when is_pid(Sink) ->
-    Sink ! journal_changed;
-evaluate_sink(Sink, journal_changed) when is_function(Sink,1) ->
-    catch(Sink(journal_changed));
-evaluate_sink(_Sink, []) -> ok;
-evaluate_sink(Sink, [ Msg = {_Timestamp, _Priority, _Data} | Result]) when is_pid(Sink) ->
-    Sink ! Msg,
-    evaluate_sink(Sink, Result);
-evaluate_sink(Sink, [ Msg = {_Timestamp, _Priority, _Log} | Result]) when is_function(Sink,1) ->
-    catch(Sink(Msg)),
-    evaluate_sink(Sink, Result);
-evaluate_sink(Sink, [ _ | Result]) when is_pid(Sink);is_function(Sink,1) ->
-    evaluate_sink(Sink, Result);
-evaluate_sink(_Sink, _Result) ->
-    erlang:error(badarg).
-
+    
 %% @private
 check_options([]) ->
     ok;

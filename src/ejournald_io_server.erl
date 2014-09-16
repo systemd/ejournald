@@ -33,7 +33,7 @@
 %% ----------------------------------------------------------------------------------------------------
 %% -- gen_server callbacks
 start_link(Options) ->
-    gen_server:start_link(?MODULE, [Options], []).
+    gen_server:start_link(?MODULE, Options, []).
 
 init(Options) ->
     State = evaluate_options(Options),

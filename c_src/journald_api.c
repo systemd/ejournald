@@ -579,7 +579,9 @@ static void * notifier_run(void *arg){
 static ERL_NIF_TERM nif_open_notifier (ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 
     journal_container *jc;
-    enif_get_resource(env, argv[0], journal_container_type, (void **) &jc);
+
+    if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
+        return enif_make_badarg(env);
 
     if (jc->notifier_used == 1)
         return return_error_string(env, "notifier_already_exists");
@@ -605,7 +607,9 @@ static ERL_NIF_TERM nif_open_notifier (ErlNifEnv* env, int argc, const ERL_NIF_T
 static ERL_NIF_TERM nif_close_notifier (ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 
     journal_container *jc;
-    enif_get_resource(env, argv[0], journal_container_type, (void **) &jc);
+
+    if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
+        return enif_make_badarg(env);
 
     if (jc->notifier_used == 0)
         return return_error_string(env, "no_notifier_available");
@@ -623,7 +627,8 @@ static ERL_NIF_TERM nif_get_realtime_usec (ErlNifEnv *env, int argc, const ERL_N
     uint64_t usec;
     int r;
 
-    enif_get_resource(env, argv[0], journal_container_type, (void **) &jc);
+    if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc))
+        return enif_make_badarg(env);
 
     r = sd_journal_get_realtime_usec(jc->journal_pointer, &usec);
     if (r < 0 ) 
@@ -638,8 +643,9 @@ static ERL_NIF_TERM nif_seek_realtime_usec (ErlNifEnv *env, int argc, const ERL_
     uint64_t usec;
     int r;
     
-    enif_get_resource(env, argv[0], journal_container_type, (void **) &jc);
-    enif_get_uint64(env, argv[1], &usec);
+    if (!enif_get_resource(env, argv[0], journal_container_type, (void **) &jc)
+        || !enif_get_uint64(env, argv[1], &usec))
+        return enif_make_badarg(env);
 
     r = sd_journal_seek_realtime_usec(jc->journal_pointer, usec);
     if (r < 0) 

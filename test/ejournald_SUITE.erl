@@ -121,7 +121,9 @@ receive_flush(N) ->
     receive
         {_Timestamp, _Priority, Log} -> 
             ct:log(binary_to_list(Log)),
-            receive_flush(N-1)
+            receive_flush(N-1);
+        journal_invalidate ->
+            ok
     after
         500 ->
             erlang:error(timeout)

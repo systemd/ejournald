@@ -41,6 +41,10 @@ nif_stub_error(Line) ->
 
 %% ----------------------------------------------------------------------------------
 %% -- low level journald API
+
+%% used by lager and lager_journald_backend to write logs
+-type value() :: number() | atom() | iolist().
+-spec sendv([{iolist(),value()}]) -> any().
 sendv(Args) ->
     sendv_nif(list_conversion(Args)).
 
