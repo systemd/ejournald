@@ -65,7 +65,7 @@
                             {log_level, log_level()} |
                             {erl_opts(), atom()}.
 
--type direction()       ::  bot | top.
+-type direction()       ::  ascending | descending.
 -type datetime1970()    ::  calendar:datetime1970().
 -type sink_fun()        ::  fun( (log_message()) -> any() ).
 -type sink()            ::  pid() | sink_fun().
@@ -206,7 +206,7 @@ evaluate_sink(_Sink, _Result) ->
 %% @private
 check_options([]) ->
     ok;
-check_options([{direction, Dir} | RestOpts]) when Dir =:=bot;Dir =:= top ->
+check_options([{direction, Dir} | RestOpts]) when Dir=:=ascending;Dir=:=descending ->
     check_options(RestOpts);
 check_options([{since, {{Y,M,D}, {H,Min,S}}} | RestOpts]) 
     when is_number(Y),is_number(M),is_number(D),is_number(H),is_number(Min),is_number(S) ->

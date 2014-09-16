@@ -64,12 +64,12 @@ io_fwrite(_Config) ->
 %% ----------------------------------------------------------------------------------------------------
 %% -- testcases READING
 read_last_3_logs(_Config) ->
-    Logs = ejournald:get_logs([{direction, top}, {at_most, 3}]),
+    Logs = ejournald:get_logs([{direction, descending}, {at_most, 3}]),
     [ [ ct:log(binary_to_list(Field)) || Field <- Log ++ [<<"~n">>] ] || {_Timestamp, _Priority, Log} <- Logs ],
     ok.
 
 read_last_3_messages(_Config) ->
-    Logs = ejournald:get_logs([{direction, top}, {at_most, 3}, {message, true}]),
+    Logs = ejournald:get_logs([{direction, descending}, {at_most, 3}, {message, true}]),
     [ ct:log(binary_to_list(Log)) || {_Timestamp, _Priority, Log} <- Logs ],
     ok.
 
@@ -77,7 +77,7 @@ read_since(_Config) ->
     DateTime = calendar:now_to_universal_time(erlang:now()),
     {Date, {H, M, S}} = DateTime,
     Since = {Date, {H, M-5, S}},
-    Logs = ejournald:get_logs([{direction, bot}, {since, Since}, {message, true}]),
+    Logs = ejournald:get_logs([{direction, ascending}, {since, Since}, {message, true}]),
     [ ct:log(binary_to_list(Log)) || {_Timestamp, _Priority, Log} <- Logs ],
     ok.
 
@@ -86,7 +86,7 @@ read_since_until(_Config) -> %% don't try this test around midnight ;) (the days
     {Date, {H, M, S}} = DateTime,
     Since = {Date, {mod(H-1, 24), mod(M-10, 60), S}},
     Until = {Date, {mod(H-1, 24), mod(M-5, 60), S}},
-    Logs = ejournald:get_logs([{direction, top}, {at_most, 10}, {since, Since}, {until, Until}, {message, true}]),
+    Logs = ejournald:get_logs([{direction, descending}, {at_most, 10}, {since, Since}, {until, Until}, {message, true}]),
     [ ct:log(binary_to_list(Log)) || {_Timestamp, _Priority, Log} <- Logs ],
     ok.
 

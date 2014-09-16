@@ -37,10 +37,10 @@ where *Timestamp* is of type [calendar:datetime1970()](http://www.erlang.org/doc
     flush(). % some new logs might appear here 
 ```
 
-is roughly equivalent to *'journalctl -f'* giving you the last 10 logs in message-only format (just one string per log) and following the journal if new logs appear. Leaving the 'message'-option would give you whole logs (a list of strings per log). The 'Options' parameter is always intended to filter the choice of logs. Just *ejournald:get_logs([ ])* would reproduce the whole journal. To restrict the time-frame for *get_logs()* you can use the options 'since' and 'until'. The order of logs is always destined by the 'direction'-option (by default 'top' - from newest to oldest). Another example:
+is roughly equivalent to *'journalctl -f'* giving you the last 10 logs in message-only format (just one string per log) and following the journal if new logs appear. Leaving the 'message'-option would give you whole logs (a list of strings per log). The 'Options' parameter is always intended to filter the choice of logs. Just *ejournald:get_logs([ ])* would reproduce the whole journal. To restrict the time-frame for *get_logs()* you can use the options 'since' and 'until'. The order of logs is always destined by the 'direction'-option (by default 'descending' - from newest to oldest). Another example:
 
 ```erlang
-    Logs = ejournald:get_logs([{direction, bot}, {since, {{2013,12,31},{12,0,0}} }]).
+    Logs = ejournald:get_logs([{direction, ascending}, {since, {{2013,12,31},{12,0,0}} }]).
 ```
 
 This gives you full logs in the order 'oldest to newest' since lunchtime of last silvester. Note that you must use UTC-time. If possible filtering should be done by ejournald since the used C-API in the background is much faster at handling this. You can use as many different log_notify()'s as you want at the same time. Different filters will be handled properly. A process handling new logs has the following layout:

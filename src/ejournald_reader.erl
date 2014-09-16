@@ -67,7 +67,7 @@ start_link(Options) ->
 init(_Options) ->
     {ok, Ctx} = journald_api:open(),
     Notifier = #notifier{active = false, user_pids = []},
-    State = #state{ctx = Ctx, direction = top, time_frame = #time_frame{}, notifier = Notifier},
+    State = #state{ctx = Ctx, direction = descending, time_frame = #time_frame{}, notifier = Notifier},
     {ok, State}.
 
 handle_call({evaluate, Options}, _From, State) ->
@@ -106,7 +106,7 @@ code_change(_,_,State) -> {ok, State}.
 %% ----------------------------------------------------------------------------------------------------
 %% -- evaluate options for log retrieval
 evaluate_log_options(Options, State) ->
-    Dir = proplists:get_value(direction, Options, top),
+    Dir = proplists:get_value(direction, Options, descending),
     AtMost = proplists:get_value(at_most, Options, undefined),
     Since = proplists:get_value(since, Options, undefined),
     Until = proplists:get_value(until, Options, undefined),
@@ -188,14 +188,14 @@ reset_timeframe(DateTime1, DateTime2, State = #state{ctx = Ctx}) ->
     {ok, Cursor1} = seek_timestamp(DateTime1, State),
     {ok, Cursor2} = seek_timestamp(DateTime2, State),
     case State#state.direction of
-        bot -> 
+        ascending -> 
             case Cursor1 of
                 undefined ->
                     journald_api:seek_head(Ctx);
                 _ ->
                     reset_cursor(Cursor1, State)
             end;
-        top -> 
+        descending -> 
             case Cursor2 of
                 undefined ->
                     journald_api:seek_tail(Ctx);
@@ -279,21 +279,21 @@ unix_seconds_to_datetime(UnixTime) ->
 %% -- pointer movement api
 move(next, #state{ctx = Ctx, direction = Dir, time_frame = #time_frame{fst_cursor = Cursor1, snd_cursor = Cursor2}}) ->
     case Dir of 
-        bot when Cursor2 /= undefined -> 
+        ascending when Cursor2 /= undefined -> 
             case journald_api:test_cursor(Ctx, Cursor2) of
                 ok -> no_more;
                 _ ->
                     move1(Ctx, next)
             end;
-        bot ->
+        ascending ->
             move1(Ctx, next);
-        top when Cursor1 /= undefined -> 
+        descending when Cursor1 /= undefined -> 
             case journald_api:test_cursor(Ctx, Cursor1) of
                 ok -> no_more;
                 _ ->
                     move1(Ctx, previous)
             end;
-        top ->
+        descending ->
             move1(Ctx, previous)
     end;
 move(head, #state{ctx = Ctx, time_frame = #time_frame{fst_cursor = Cursor1}})
@@ -345,7 +345,7 @@ flush_logs(Options, State = #state{ctx = Ctx}) ->
         true -> Call = next_message;
         _    -> Call = next_entry
     end,
-    State1 = State#state{direction = bot, time_frame = #time_frame{}},
+    State1 = State#state{direction = ascending, time_frame = #time_frame{}},
     reset_cursor(Cursor, State),
     move(next, State1),
     reset_matches(Options, State1),
