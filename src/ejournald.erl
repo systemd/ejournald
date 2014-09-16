@@ -77,9 +77,10 @@
 %% -- application callbacks
 %% @doc Application behaviour callback.
 start(_Type, _Args) ->
-    ejournald_sup:start_link(),
-    start_reader(?READER),
-    start_io(?IO_SERVER, []).
+    {ok, SupPid} = ejournald_sup:start_link(),
+    start_reader(?READER),  %% default journald reader name is 'ejournald_reader'
+    start_io(journald, []), %% default io server name is 'journald'
+    {ok, SupPid}.
 
 %% @doc Application behaviour callback.
 stop(_State) ->
@@ -157,7 +158,7 @@ evaluate_options_notify(Id, Sink, Options) ->
     end,
     Cursor = gen_server:call(Id, last_entry_cursor),
     Pid = spawn(?MODULE, log_notify_starter, [Id, Sink, [ {last_entry_cursor, Cursor} | Options ]]),
-    ok = gen_server:call(Id, {register_notifier, Pid}),
+    ejournald_reader:register_notifier(Id, Pid),
     {ok, Pid}.
 
 %% @private
@@ -180,9 +181,9 @@ log_notify_worker(Id, Sink, Options) ->
             evaluate_sink(Sink, journal_changed),
             log_notify_worker(Id, Sink, Options);
         {'EXIT', _FromPid, _Reason} ->
-            gen_server:call(Id, {unregister_notifier, self()});
+            ejournald_reader:unregister_notifier(Id, self());
         exit ->
-            gen_server:call(Id, {unregister_notifier, self()})
+            ejournald_reader:unregister_notifier(Id, self())
     end.
 
 %% @private

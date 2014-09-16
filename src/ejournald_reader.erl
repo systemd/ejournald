@@ -23,6 +23,7 @@
 -behaviour(gen_server).
 
 -export([init/1, handle_cast/2, handle_call/3, handle_info/2, terminate/2, code_change/3]).
+-export([register_notifier/2, unregister_notifier/2]).
 -export([start_link/1]).
 
 -define(LOG_LVLS,  [{emergency, 0}, 
@@ -50,6 +51,15 @@
 }).
 
 %% ----------------------------------------------------------------------------------------------------
+%% -- notifier api
+register_notifier(Id, Pid) ->
+    ok = gen_server:call(Id, {register_notifier, Pid}).
+
+
+unregister_notifier(Id, Pid) ->
+    ok = gen_server:call(Id, {unregister_notifier, Pid}).
+
+%% ----------------------------------------------------------------------------------------------------
 %% -- gen_server callbacks
 start_link(Options) ->
     gen_server:start_link(?MODULE, [Options], []).
@@ -64,9 +74,9 @@ handle_call({evaluate, Options}, _From, State) ->
     {Result, NewState} = evaluate_log_options(Options, State),
     {reply, Result, NewState};
 handle_call({register_notifier, Pid}, _From, State) ->
-    {reply, ok, register_notifier(Pid, State)};
+    {reply, ok, register_notifier1(Pid, State)};
 handle_call({unregister_notifier, Pid}, _From, State) ->
-    {reply, ok, unregister_notifier(Pid, State)};
+    {reply, ok, unregister_notifier1(Pid, State)};
 handle_call(last_entry_cursor, _From, State) ->
     LastEntryMeta = get_last_entry_cursor(State),
     {reply, LastEntryMeta, State};
@@ -87,7 +97,7 @@ handle_info(_Msg, State) ->
     {noreply, State}.
 
 terminate(_Reason, State = #state{notifier = Notifier}) -> 
-    [ unregister_notifier(Pid, State) || Pid <- Notifier#notifier.user_pids ].
+    [ unregister_notifier1(Pid, State) || Pid <- Notifier#notifier.user_pids ].
 
 %% unused
 handle_cast(_Msg, State) -> {noreply, State}.
@@ -267,39 +277,33 @@ unix_seconds_to_datetime(UnixTime) ->
 
 %% ------------------------------------------------------------------------------
 %% -- pointer movement api
-move(Pos, #state{fd = Fd, direction = Dir, time_frame = TimeFrame}) ->
-    #time_frame{fst_cursor = Cursor1, snd_cursor = Cursor2} = TimeFrame,
-    case Pos of
-        next ->
-            case Dir of 
-                bot when Cursor2 /= undefined -> 
-                    case journald_api:test_cursor(Fd, Cursor2) of
-                        ok -> no_more;
-                        _ ->
-                            move1(Fd, next)
-                    end;
-                bot ->
-                    move1(Fd, next);
-                top when Cursor1 /= undefined -> 
-                    case journald_api:test_cursor(Fd, Cursor1) of
-                        ok -> no_more;
-                        _ ->
-                            move1(Fd, previous)
-                    end;
-                top ->
+move(next, #state{fd = Fd, direction = Dir, time_frame = #time_frame{fst_cursor = Cursor1, snd_cursor = Cursor2}}) ->
+    case Dir of 
+        bot when Cursor2 /= undefined -> 
+            case journald_api:test_cursor(Fd, Cursor2) of
+                ok -> no_more;
+                _ ->
+                    move1(Fd, next)
+            end;
+        bot ->
+            move1(Fd, next);
+        top when Cursor1 /= undefined -> 
+            case journald_api:test_cursor(Fd, Cursor1) of
+                ok -> no_more;
+                _ ->
                     move1(Fd, previous)
             end;
-        head when Cursor1 /= undefined ->
-            ok = journald_api:seek_cursor(Fd, Cursor1);
-        head ->
-            ok = journald_api:seek_head(Fd);
-        tail when Cursor2 /= undefined ->
-            ok = journald_api:seek_cursor(Fd, Cursor2);
-        tail ->
-            ok = journald_api:seek_tail(Fd);
-        stay -> 
-            ok
-    end.
+        top ->
+            move1(Fd, previous)
+    end;
+move(head, #state{fd = Fd, time_frame = #time_frame{fst_cursor = Cursor1}})
+    when Cursor1 /= undefined -> ok = journald_api:seek_cursor(Fd, Cursor1);
+move(head, #state{fd = Fd}) ->
+    ok = journald_api:seek_head(Fd);
+move(tail, #state{fd = Fd, time_frame = #time_frame{snd_cursor = Cursor2}})
+    when Cursor2 /= undefined -> ok = journald_api:seek_cursor(Fd, Cursor2);
+move(tail, #state{fd = Fd}) ->
+    ok = journald_api:seek_tail(Fd).
 
 move1(Fd, previous) ->                          
     Success = journald_api:previous(Fd),
@@ -312,7 +316,7 @@ move1(Fd, next) ->
 
 %% ------------------------------------------------------------------------------
 %% -- notifier api
-register_notifier(Pid, State = #state{fd = Fd, notifier = Notifier}) ->
+register_notifier1(Pid, State = #state{fd = Fd, notifier = Notifier}) ->
     #notifier{active = Active, user_pids = Pids} = Notifier,
     case Active of
         false -> ok = journald_api:open_notifier(Fd, self());
@@ -321,7 +325,7 @@ register_notifier(Pid, State = #state{fd = Fd, notifier = Notifier}) ->
     NewNotifier = Notifier#notifier{active = true, user_pids = [Pid | Pids]},
     State#state{notifier = NewNotifier}.
 
-unregister_notifier(Pid, State = #state{fd = Fd, notifier = Notifier}) ->
+unregister_notifier1(Pid, State = #state{fd = Fd, notifier = Notifier}) ->
     #notifier{user_pids = Pids} = Notifier,
     NewPids = lists:delete(Pid, Pids),
     case NewPids of

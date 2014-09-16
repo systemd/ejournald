@@ -24,7 +24,7 @@
 -include_lib("common_test/include/ct.hrl").
 
 -define(READER, ejournald_reader).
--define(IO_SERVER, ejournald_io_server).
+-define(IO_SERVER, journald).
 
 -define(CONTROL, {control, [], [start_stop_io, start_stop_reader]}).
 -define(READ, {read, [], [read_last_3_logs, read_last_3_messages, read_since, read_since_until, notify]}).

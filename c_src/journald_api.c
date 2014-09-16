@@ -289,7 +289,7 @@ static ERL_NIF_TERM nif_get_data(ErlNifEnv* env, int argc, const ERL_NIF_TERM ar
 
     journal_container *jc;
     ErlNifBinary field;
-    ERL_NIF_TERM term;
+    ERL_NIF_TERM ret;
     int r;
     char *d;
     size_t l;
@@ -304,9 +304,9 @@ static ERL_NIF_TERM nif_get_data(ErlNifEnv* env, int argc, const ERL_NIF_TERM ar
     if (r < 0)
         return return_error(env, r);
 
-    memcpy(enif_make_new_binary(env, l, &term), d, l);
+    memcpy(enif_make_new_binary(env, l, &ret), d, l);
 
-    return enif_make_tuple2(env, atom_ok, term);
+    return enif_make_tuple2(env, atom_ok, ret);
 }
 
 /*
