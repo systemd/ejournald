@@ -12,7 +12,11 @@ First, you have to compile the sources in c_src/ using make. Next you can compil
 
 Installation using tetrapak
 --------------------------
-You can build the project by executing "tetrapak build". 
+Execute "tetrapak build".
+
+Installation using rebar
+--------------------------
+Execute "rebar compile".  
 
 Usage
 -----
@@ -23,7 +27,7 @@ Ejournald is intended to provide logging support for [journald](http://www.freed
 - a high-level API for retrieving logs (possibly by Erlang specific meta information)
 
 The I/O-server is is not capable of reading the journal. It can be used as an IO device together with the [erlang io](http://erlang.org/doc/man/io.html) library. Therefore commands like *io:format()* or *io:write()* can be used in a very convenient way to write stuff into the journal without using lager. By default an I/O-server named *ejournald_io_server* is started together with ejournald. The log level (by default *info*) and other options are fixed for one I/O-server. Thus if you need other options (e.g. another log level) you need to start your own one. Note that the 'name' option (a string) is mandatory and you have to deliver a unique name for every server. This name will appear as a prefix in the journal.
-The high-level API for reading logs consists of the two function get_logs/1 and log_notify/1. The first one will enable you to retrieve logs based on time-frames. The latter one is intended to deliver new logs as they appear in the journal. It is therefore possible to **build simple monitoring systems** using this API. Logs are always delivered in the form
+The high-level API for reading logs consists of the two function *get_logs()* and *log_notify()*. The first one will enable you to retrieve logs based on time-frames. The latter one is intended to deliver new logs as they appear in the journal. It is therefore possible to **build simple monitoring systems** using this API. Logs are always delivered in the form
 
 ```erlang
  {Timestamp, LogLevel, LogData}
