@@ -44,7 +44,7 @@
     user_pids
 }).
 -record(state, {
-    fd, 
+    ctx, 
     time_frame,
     direction,
     notifier
@@ -65,9 +65,9 @@ start_link(Options) ->
     gen_server:start_link(?MODULE, [Options], []).
 
 init(_Options) ->
-    {ok, Fd} = journald_api:open(),
+    {ok, Ctx} = journald_api:open(),
     Notifier = #notifier{active = false, user_pids = []},
-    State = #state{fd = Fd, direction = top, time_frame = #time_frame{}, notifier = Notifier},
+    State = #state{ctx = Ctx, direction = top, time_frame = #time_frame{}, notifier = Notifier},
     {ok, State}.
 
 handle_call({evaluate, Options}, _From, State) ->
@@ -123,33 +123,33 @@ evaluate_log_options(Options, State) ->
 
 %% ----------------------------------------------------------------------------------------------------
 %% -- retrieving logs
-next_entry(State = #state{fd = Fd}) ->
+next_entry(State = #state{ctx = Ctx}) ->
     case move(next, State) of
         ok -> 
-            {Timestamp, Priority} = get_meta_info(Fd),
-            Fields = get_fields(Fd),
+            {Timestamp, Priority} = get_meta_info(Ctx),
+            Fields = get_fields(Ctx),
             {Timestamp, Priority, Fields};
         Error -> Error
     end.
 
-get_fields(Fd) ->
-    get_fields(Fd, []).
+get_fields(Ctx) ->
+    get_fields(Ctx, []).
 
-get_fields(Fd, Akk) ->
-    case journald_api:enumerate_data(Fd) of
+get_fields(Ctx, Akk) ->
+    case journald_api:enumerate_data(Ctx) of
         {ok, Data} ->
-            get_fields(Fd, [Data | Akk]);
+            get_fields(Ctx, [Data | Akk]);
         _ ->
             Akk
     end. 
 
-next_msg(State = #state{fd = Fd}) ->
+next_msg(State = #state{ctx = Ctx}) ->
     case move(next, State) of
         ok -> 
-            case journald_api:get_data(Fd, <<"MESSAGE\0">>) of
+            case journald_api:get_data(Ctx, <<"MESSAGE\0">>) of
                 {ok, PrefixedData} -> 
                     [_, Data] = binary:split(PrefixedData, [<<"=">>]),
-                    {Timestamp, Priority} = get_meta_info(Fd),
+                    {Timestamp, Priority} = get_meta_info(Ctx),
                     {Timestamp, Priority, Data};
                 Error -> Error
             end;
@@ -157,48 +157,48 @@ next_msg(State = #state{fd = Fd}) ->
             Error
     end.
 
-get_last_entry_cursor(#state{fd = Fd}) ->
-    ok = journald_api:seek_tail(Fd),
-    ok = journald_api:previous(Fd),
-    {ok, Cursor} = journald_api:get_cursor(Fd),
+get_last_entry_cursor(#state{ctx = Ctx}) ->
+    ok = journald_api:seek_tail(Ctx),
+    ok = journald_api:previous(Ctx),
+    {ok, Cursor} = journald_api:get_cursor(Ctx),
     Cursor.
 
-get_meta_info(Fd) ->
-    {ok, UnixTimestamp} = journald_api:get_realtime_usec(Fd),
+get_meta_info(Ctx) ->
+    {ok, UnixTimestamp} = journald_api:get_realtime_usec(Ctx),
     Timestamp = unix_seconds_to_datetime(UnixTimestamp),
-    {ok, PriorityBin} = journald_api:get_data(Fd, <<"PRIORITY\0">>),
+    {ok, PriorityBin} = journald_api:get_data(Ctx, <<"PRIORITY\0">>),
     [_, PriorityBinInt] = binary:split(PriorityBin, [<<"=">>]),
     {Priority, _ } = lists:keyfind(binary_to_integer(PriorityBinInt), 2, ?LOG_LVLS),
     {Timestamp, Priority}.
 
 %% ------------------------------------------------------------------------
 %% -- set pointer
-reset_cursor(Cursor, #state{fd = Fd}) ->
-    journald_api:seek_cursor(Fd, Cursor),
-    journald_api:next(Fd),
-    case journald_api:test_cursor(Fd, Cursor) of
+reset_cursor(Cursor, #state{ctx = Ctx}) ->
+    journald_api:seek_cursor(Ctx, Cursor),
+    journald_api:next(Ctx),
+    case journald_api:test_cursor(Ctx, Cursor) of
         ok -> ok;
         _ -> 
-            journald_api:seek_cursor(Fd, Cursor),
-            journald_api:previous(Fd)
+            journald_api:seek_cursor(Ctx, Cursor),
+            journald_api:previous(Ctx)
     end,
-    journald_api:seek_cursor(Fd, Cursor).
+    journald_api:seek_cursor(Ctx, Cursor).
 
-reset_timeframe(DateTime1, DateTime2, State = #state{fd = Fd}) ->
+reset_timeframe(DateTime1, DateTime2, State = #state{ctx = Ctx}) ->
     {ok, Cursor1} = seek_timestamp(DateTime1, State),
     {ok, Cursor2} = seek_timestamp(DateTime2, State),
     case State#state.direction of
         bot -> 
             case Cursor1 of
                 undefined ->
-                    journald_api:seek_head(Fd);
+                    journald_api:seek_head(Ctx);
                 _ ->
                     reset_cursor(Cursor1, State)
             end;
         top -> 
             case Cursor2 of
                 undefined ->
-                    journald_api:seek_tail(Fd);
+                    journald_api:seek_tail(Ctx);
                 _ ->
                     reset_cursor(Cursor2, State)
             end
@@ -208,58 +208,58 @@ reset_timeframe(DateTime1, DateTime2, State = #state{fd = Fd}) ->
 
 seek_timestamp(undefined, _State) ->
     {ok, undefined};
-seek_timestamp(DateTime, #state{fd = Fd}) ->
+seek_timestamp(DateTime, #state{ctx = Ctx}) ->
     Time = datetime_to_unix_seconds(DateTime),
-    ok = journald_api:seek_realtime_usec(Fd, Time),
-    case journald_api:next(Fd) of
+    ok = journald_api:seek_realtime_usec(Ctx, Time),
+    case journald_api:next(Ctx) of
         ok -> ok;
         no_more ->
-            journald_api:seek_tail(Fd),
-            journald_api:previous(Fd)
+            journald_api:seek_tail(Ctx),
+            journald_api:previous(Ctx)
     end,
-    {ok, EntryTimeNext} = journald_api:get_realtime_usec(Fd),
-    ok = journald_api:seek_realtime_usec(Fd, Time),
-    case journald_api:previous(Fd) of
+    {ok, EntryTimeNext} = journald_api:get_realtime_usec(Ctx),
+    ok = journald_api:seek_realtime_usec(Ctx, Time),
+    case journald_api:previous(Ctx) of
         ok -> ok;
         no_more ->
-            journald_api:seek_head(Fd),
-            journald_api:next(Fd)
+            journald_api:seek_head(Ctx),
+            journald_api:next(Ctx)
     end,
-    {ok, EntryTimePrevious} = journald_api:get_realtime_usec(Fd),
+    {ok, EntryTimePrevious} = journald_api:get_realtime_usec(Ctx),
     Diff1 = Time - EntryTimeNext,
     Diff2 = Time - EntryTimePrevious,
     case (abs(Diff1) < abs(Diff2)) of
         true ->
-            ok = journald_api:seek_realtime_usec(Fd, Time),
-            ok = journald_api:next(Fd),
-            journald_api:get_cursor(Fd);
+            ok = journald_api:seek_realtime_usec(Ctx, Time),
+            ok = journald_api:next(Ctx),
+            journald_api:get_cursor(Ctx);
         false ->
-            journald_api:get_cursor(Fd)
+            journald_api:get_cursor(Ctx)
     end.
 
-reset_matches(Options, #state{fd = Fd}) ->
+reset_matches(Options, #state{ctx = Ctx}) ->
     LogLvl = proplists:get_value(log_level, Options, info),
-    journald_api:flush_matches(Fd),
+    journald_api:flush_matches(Ctx),
     LogLvlInt = proplists:get_value(LogLvl, ?LOG_LVLS),
     BinaryLogLvls = [ integer_to_binary(Lvl) || Lvl <- lists:seq(0, LogLvlInt) ],
     Priority = <<"PRIORITY=">>,
-    [ journald_api:add_match(Fd, <<Priority/binary, Lvl/binary>>) || Lvl <- BinaryLogLvls ],
+    [ journald_api:add_match(Ctx, <<Priority/binary, Lvl/binary>>) || Lvl <- BinaryLogLvls ],
     ErlNode = proplists:get_value(erl_node, Options, undefined),
     ErlApp = proplists:get_value(erl_app, Options, undefined),
     ErlMod = proplists:get_value(erl_mod, Options, undefined),
     ErlFun = proplists:get_value(erl_fun, Options, undefined),
-    add_conjunction(Fd, <<"ERLANG_NODE=">>, ErlNode),
-    add_conjunction(Fd, <<"SYSLOG_IDENTIFIER=">>, ErlApp),
-    add_conjunction(Fd, <<"CODE_FILE=">>, ErlMod),
-    add_conjunction(Fd, <<"CODE_FUNC=">>, ErlFun).
+    add_conjunction(Ctx, <<"ERLANG_NODE=">>, ErlNode),
+    add_conjunction(Ctx, <<"SYSLOG_IDENTIFIER=">>, ErlApp),
+    add_conjunction(Ctx, <<"CODE_FILE=">>, ErlMod),
+    add_conjunction(Ctx, <<"CODE_FUNC=">>, ErlFun).
 
-add_conjunction(_Fd, _Field, undefined) ->
+add_conjunction(_Ctx, _Field, undefined) ->
     ok;
-add_conjunction(Fd, Field, Value) ->
+add_conjunction(Ctx, Field, Value) ->
     Value1 = atom_to_binary(Value, latin1),
-    ok = journald_api:add_conjunction(Fd),
+    ok = journald_api:add_conjunction(Ctx),
     Null = <<"\0">>,
-    ok = journald_api:add_match(Fd, <<Field/binary, Value1/binary, Null/binary>>).
+    ok = journald_api:add_match(Ctx, <<Field/binary, Value1/binary, Null/binary>>).
 
 datetime_to_unix_seconds(DateTime) ->
     DateTimeInSecs = calendar:datetime_to_gregorian_seconds(DateTime),
@@ -277,60 +277,60 @@ unix_seconds_to_datetime(UnixTime) ->
 
 %% ------------------------------------------------------------------------------
 %% -- pointer movement api
-move(next, #state{fd = Fd, direction = Dir, time_frame = #time_frame{fst_cursor = Cursor1, snd_cursor = Cursor2}}) ->
+move(next, #state{ctx = Ctx, direction = Dir, time_frame = #time_frame{fst_cursor = Cursor1, snd_cursor = Cursor2}}) ->
     case Dir of 
         bot when Cursor2 /= undefined -> 
-            case journald_api:test_cursor(Fd, Cursor2) of
+            case journald_api:test_cursor(Ctx, Cursor2) of
                 ok -> no_more;
                 _ ->
-                    move1(Fd, next)
+                    move1(Ctx, next)
             end;
         bot ->
-            move1(Fd, next);
+            move1(Ctx, next);
         top when Cursor1 /= undefined -> 
-            case journald_api:test_cursor(Fd, Cursor1) of
+            case journald_api:test_cursor(Ctx, Cursor1) of
                 ok -> no_more;
                 _ ->
-                    move1(Fd, previous)
+                    move1(Ctx, previous)
             end;
         top ->
-            move1(Fd, previous)
+            move1(Ctx, previous)
     end;
-move(head, #state{fd = Fd, time_frame = #time_frame{fst_cursor = Cursor1}})
-    when Cursor1 /= undefined -> ok = journald_api:seek_cursor(Fd, Cursor1);
-move(head, #state{fd = Fd}) ->
-    ok = journald_api:seek_head(Fd);
-move(tail, #state{fd = Fd, time_frame = #time_frame{snd_cursor = Cursor2}})
-    when Cursor2 /= undefined -> ok = journald_api:seek_cursor(Fd, Cursor2);
-move(tail, #state{fd = Fd}) ->
-    ok = journald_api:seek_tail(Fd).
+move(head, #state{ctx = Ctx, time_frame = #time_frame{fst_cursor = Cursor1}})
+    when Cursor1 /= undefined -> ok = journald_api:seek_cursor(Ctx, Cursor1);
+move(head, #state{ctx = Ctx}) ->
+    ok = journald_api:seek_head(Ctx);
+move(tail, #state{ctx = Ctx, time_frame = #time_frame{snd_cursor = Cursor2}})
+    when Cursor2 /= undefined -> ok = journald_api:seek_cursor(Ctx, Cursor2);
+move(tail, #state{ctx = Ctx}) ->
+    ok = journald_api:seek_tail(Ctx).
 
-move1(Fd, previous) ->                          
-    Success = journald_api:previous(Fd),
-    journald_api:restart_data(Fd),
+move1(Ctx, previous) ->                          
+    Success = journald_api:previous(Ctx),
+    journald_api:restart_data(Ctx),
     Success;
-move1(Fd, next) ->                          
-    Success = journald_api:next(Fd),
-    journald_api:restart_data(Fd),
+move1(Ctx, next) ->                          
+    Success = journald_api:next(Ctx),
+    journald_api:restart_data(Ctx),
     Success.
 
 %% ------------------------------------------------------------------------------
 %% -- notifier api
-register_notifier1(Pid, State = #state{fd = Fd, notifier = Notifier}) ->
+register_notifier1(Pid, State = #state{ctx = Ctx, notifier = Notifier}) ->
     #notifier{active = Active, user_pids = Pids} = Notifier,
     case Active of
-        false -> ok = journald_api:open_notifier(Fd, self());
+        false -> ok = journald_api:open_notifier(Ctx, self());
         true -> ok
     end,
     NewNotifier = Notifier#notifier{active = true, user_pids = [Pid | Pids]},
     State#state{notifier = NewNotifier}.
 
-unregister_notifier1(Pid, State = #state{fd = Fd, notifier = Notifier}) ->
+unregister_notifier1(Pid, State = #state{ctx = Ctx, notifier = Notifier}) ->
     #notifier{user_pids = Pids} = Notifier,
     NewPids = lists:delete(Pid, Pids),
     case NewPids of
         [] -> 
-            ok = journald_api:close_notifier(Fd),
+            ok = journald_api:close_notifier(Ctx),
             NewActive = false;
         _NotEmpty ->
             NewActive = true
@@ -338,7 +338,7 @@ unregister_notifier1(Pid, State = #state{fd = Fd, notifier = Notifier}) ->
     NewNotifier = Notifier#notifier{active = NewActive, user_pids = NewPids},
     State#state{notifier = NewNotifier}.
 
-flush_logs(Options, State = #state{fd = Fd}) ->
+flush_logs(Options, State = #state{ctx = Ctx}) ->
     Cursor = proplists:get_value(last_entry_cursor, Options),
     Msg = proplists:get_value(message, Options, undefined),
     case Msg of
@@ -350,11 +350,11 @@ flush_logs(Options, State = #state{fd = Fd}) ->
     move(next, State1),
     reset_matches(Options, State1),
     Result = collect_logs(Call, undefined, State1),
-    case journald_api:get_cursor(Fd) of
+    case journald_api:get_cursor(Ctx) of
         {ok, NewCursor} -> ok;
         _               -> 
-            move1(Fd, previous),
-            {ok, NewCursor} = journald_api:get_cursor(Fd)
+            move1(Ctx, previous),
+            {ok, NewCursor} = journald_api:get_cursor(Ctx)
     end,
     {Result, NewCursor}.
 
