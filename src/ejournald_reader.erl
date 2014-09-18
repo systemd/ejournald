@@ -23,7 +23,7 @@
 -behaviour(gen_server).
 
 -export([init/1, handle_cast/2, handle_call/3, handle_info/2, terminate/2, code_change/3]).
--export([start_link/2]).
+-export([start_link/1, start_link/2]).
 
 -include("internal.hrl").
 
@@ -39,8 +39,9 @@
 
 %% ----------------------------------------------------------------------------------------------------
 %% -- gen_server callbacks
-start_link(undefined, Options) ->
-    gen_server:start_link(?MODULE, [Options], []);
+start_link(Options) ->
+    gen_server:start_link(?MODULE, [Options], []).
+    
 start_link(Name, Options) ->
     gen_server:start_link({local, Name}, ?MODULE, [Options], []).
 

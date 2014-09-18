@@ -30,6 +30,15 @@
          stop/1
         ]).
 
+-define(CHILD_SPEC(Name, Mod, Args),
+    {   Name,
+        {Mod, start_link, Args},
+        transient,
+        infinity,
+        worker,
+        [Mod]
+    }).
+
 start_link() ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
@@ -65,12 +74,7 @@ init(_Arg) ->
 %% ----------------------------------------------------------------------------------------------------
 %% -- helpers
 child_spec(Mod, Options) ->
-    child_spec(undefined, Mod, Options).
+    ?CHILD_SPEC(make_ref(), Mod, [Options]).
 child_spec(Name, Mod, Options) ->
-    {   Name,
-        {Mod, start_link, [Name, Options]},
-        transient,
-        infinity,
-        worker,
-        [Mod]
-    }.
+    ?CHILD_SPEC(Name, Mod, [Name, Options]).
+
