@@ -19,26 +19,23 @@
 % DEALINGS IN THE SOFTWARE.
 
 %% @private
--module(ejournald_sup).
+-module(ejournald_notifier_sup).
 
 -behaviour(supervisor).
 
 -export([init/1]).
 -export([start_link/0,
          start/2,
-         start/3,
          stop/1
         ]).
 
--define(NOTIFIER_SUP, ejournald_notifier_sup).
-
--define(CHILD_SPEC(Name, Mod, Args, Type),
-    {   Name,
-        {Mod, start_link, Args},
-        transient,
+-define(CHILD_SPEC(Sink, Options),
+    {   make_ref(),
+        {ejournald_notifier, start_link, [Sink, Options]},
+        temporary,
         infinity,
-        Type,
-        [Mod]
+        worker,
+        [ejournald_notifier]
     }).
 
 start_link() ->
@@ -46,37 +43,15 @@ start_link() ->
 
 %% ----------------------------------------------------------------------------------------------------
 %% -- Public API for io server
-start(Mod, Options) ->
-    ChildSpec = child_spec(Mod, Options, worker),
+start(Sink, Options) ->
+    ChildSpec = ?CHILD_SPEC(Sink, Options),
     supervisor:start_child(?MODULE, ChildSpec).
 
-start(Mod, Name, Options) ->
-    ChildSpec = child_spec(Name, Mod, Options, worker),
-    supervisor:start_child(?MODULE, ChildSpec).
-
-stop(Name) when is_atom(Name) ->
-    case whereis(Name) of
-        Pid when is_pid(Pid) -> 
-            ok = gen_server:call(Name, {terminate, normal}),
-            supervisor:delete_child(?MODULE, Name);
-        _ -> 
-            ok
-    end;
-stop(Pid) when is_pid(Pid) -> 
-    ok = gen_server:call(Pid, {terminate, normal});
-stop(Name) ->
-    ok = gen_server:call(Name, {terminate, normal}),
-    supervisor:delete_child(?MODULE, Name).
+stop(Pid) -> 
+    ok = gen_server:call(Pid, {terminate, normal}).
 
 %% ----------------------------------------------------------------------------------------------------
 %% -- supervisor callbacks
 init(_Arg) ->
-    {ok, {{one_for_one, 0, 1}, [?CHILD_SPEC(?NOTIFIER_SUP, ?NOTIFIER_SUP, [], supervisor)]}}.
-
-%% ----------------------------------------------------------------------------------------------------
-%% -- helpers
-child_spec(Mod, Options, Type) ->
-    ?CHILD_SPEC(make_ref(), Mod, [Options], Type).
-child_spec(Name, Mod, Options, Type) ->
-    ?CHILD_SPEC(Name, Mod, [Name, Options], Type).
+    {ok, {{one_for_one, 0, 1}, []}}.
 

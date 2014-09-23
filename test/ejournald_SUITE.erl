@@ -45,19 +45,20 @@ start_stop_reader(_Config) ->
 io_put_chars(_Config) -> 
     ok = io:put_chars(?IO_SERVER, "put_chars1"),
     ok = io:put_chars(?IO_SERVER, " put_chars2"),
-    ok = io:put_chars(?IO_SERVER, " written by io:put_char"),
+    ok = io:put_chars(?IO_SERVER, " written by io:put_char()"),
     ok = io:nl(?IO_SERVER).
 
 io_format(_Config) ->
-    ok = io:format(?IO_SERVER, "written by format~n", []).
+    ok = io:format(?IO_SERVER, "I am written by io:format()~n", []).
 
 io_write(_Config) ->
+    ok = io:format(?IO_SERVER, "Some term by io:write(): ~n", []),
     ok = io:write(?IO_SERVER, ["I", "am", "a", "list", "written"]),
-    ok = io:write(?IO_SERVER, " by io:write"),
+    ok = io:write(?IO_SERVER, " by io:write()"),
     ok = io:nl(?IO_SERVER).
 
 io_fwrite(_Config) ->
-    ok = io:fwrite(?IO_SERVER, "Some string by fwrite:", []),
+    ok = io:fwrite(?IO_SERVER, "Some string by io:fwrite(): ", []),
     ok = io:fwrite(?IO_SERVER, "|~10.5c|~-10.5c|~5c|~n", [$a, $b, $c]),
     ok = io:nl(?IO_SERVER).
 
@@ -91,6 +92,7 @@ read_since_until(_Config) -> %% don't try this test around midnight ;) (the days
     ok.
 
 notify(_Config) ->
+    ok = io:format(?IO_SERVER, "Gonna test ejournald:log_notify() ...~n", []),
     {ok, _Pid} = ejournald:log_notify(self(), [{message, true}]),
     ok = io:format(?IO_SERVER, "1~n", []),
     ok = io:format(?IO_SERVER, "2~n", []),

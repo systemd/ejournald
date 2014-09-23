@@ -30,45 +30,45 @@ The I/O-server is is not capable of reading the journal. It can be used as an IO
 The high-level API for reading logs consists of the two function *get_logs()* and *log_notify()*. The first one will enable you to retrieve logs based on time-frames. The latter one is intended to deliver new logs as they appear in the journal. It is therefore possible to **build simple monitoring systems** using this API. Logs are always delivered in the form
 
 ```erlang
- {Timestamp, LogLevel, LogData}
+ Timestamp, LogLevel, LogData}
 ```
 
 where *Timestamp* is of type [calendar:datetime1970()](http://www.erlang.org/doc/man/calendar.html#type-datetime1970), *LogLevel* is one of the eight journald log levels and *LogData* is a string or a list of strings. For example 
 
 ```erlang
-    LastLogs = ejournald:get_logs([{at_most, 10}, {message, true}]),
-    {ok, NotifyPid} = ejournald:log_notify(self(), [{message, true}]),
-    flush(). % some new logs might appear here 
+LastLogs = ejournald:get_logs([{at_most, 10}, {message, true}]),
+{ok, NotifyPid} = ejournald:log_notify(self(), [{message, true}]),
+flush(). % some new logs might appear here 
 ```
 
 is roughly equivalent to *'journalctl -f'* giving you the last 10 logs in message-only format (just one string per log) and following the journal if new logs appear. Leaving the 'message'-option would give you whole logs (a list of strings per log). The 'Options' parameter is always intended to filter the choice of logs. Just *ejournald:get_logs([ ])* would reproduce the whole journal. To restrict the time-frame for *get_logs()* you can use the options 'since' and 'until'. The order of logs is always destined by the 'direction'-option (by default 'descending' - from newest to oldest). Another example:
 
 ```erlang
-    Logs = ejournald:get_logs([{direction, ascending}, {since, {{2013,12,31},{12,0,0}} }]).
+Logs = ejournald:get_logs([{direction, ascending}, {since, {{2013,12,31},{12,0,0}} }]).
 ```
 
 This gives you full logs in the order 'oldest to newest' since lunchtime of last silvester. Note that you must use UTC-time. If possible filtering should be done by ejournald since the used C-API in the background is much faster at handling this. You can use as many different log_notify()'s as you want at the same time. Different filters will be handled properly. A process handling new logs has the following layout:
 
 ```erlang
-    loop() ->
-        receive 
-            {'EXIT', FromPid, Reason} ->
-                % end your process;
-                % ejournald automatically links a worker process to your pid.
-                % Thus if you end your process it will also end this worker.
-            {Timestamp, LogLevel, LogData} ->
-                % do something here
-                loop();
-            journal_invalidate ->
-                % maybe a new journal file was appended, refresh your monitors!
-                loop()
-        end.
+loop() ->
+    receive 
+        {'EXIT', FromPid, Reason} ->
+            % end your process;
+            % ejournald automatically links a worker process to your pid.
+            % Thus if you end your process it will also end this worker.
+        {Timestamp, LogLevel, LogData} ->
+            % do something here
+            loop();
+        journal_invalidate ->
+            % maybe a new journal file was appended, refresh your monitors!
+            loop()
+    end.
 ```
 
 You can also provide a function for working on the logs. The [lager_journald_backend](https://github.com/travelping/lager_journald_backend) is capable of storing Erlang meta information in journald. These can also be used to filter logs by Erlang application or other data:
 
 ```erlang
-    Logs = ejournald:get_logs([{erl_app, my_app}, {at_most, 5}]).
+Logs = ejournald:get_logs([{erl_app, my_app}, {at_most, 5}]).
 ```
 
 This gives me the last five logs coming from the application 'my_app'. Note that meta information is logged automatically by the backend.

@@ -25,7 +25,7 @@
 -include("internal.hrl").
 
 -export([init/1, handle_cast/2, handle_call/3, handle_info/2, terminate/2, code_change/3]).
--export([start_link/1]).
+-export([start_link/2]).
 
 -record(state, {
     ctx, 
@@ -35,7 +35,7 @@
 
 %% ----------------------------------------------------------------------------------------------------
 %% -- gen_server callbacks
-start_link({Sink, Options}) ->
+start_link(Sink, Options) ->
     gen_server:start_link(?MODULE, {Sink, Options}, []).
 
 init({Sink, Options}) ->

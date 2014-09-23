@@ -106,12 +106,12 @@ stop_io(Id) ->
 
 %% ----------------------------------------------------------------------------------------------------
 %% -- API for ejournald_reader
-%% @doc Start the default reader named ejournald_reader.
+%% @doc Start an unnamed reader (the default reader 'ejournald_reader' should suffice).
 -spec start_reader() -> {ok, pid()} | {error, any()}.
 start_reader() ->
     ejournald_sup:start(?READER, []).
 
-%% @doc Start your own reader (should not be necessary).
+%% @doc Start a named reader (the default reader' ejournald_reader' should suffice).
 -spec start_reader( term() ) -> {ok, pid()} | {error, any()}.
 start_reader(Name) ->
     ejournald_sup:start(?READER, Name, []).
@@ -137,6 +137,9 @@ get_logs(Id, Options) ->
     end.
     
 %% @doc Starts a worker that monitors the journal and filters new entries. 
+%% Note that the message 'journal_invalidate' means that "journal files were added or 
+%% removed (possibly due to rotation)" according to the systemd documentation. Thus you 
+%% should e.g. refresh your monitors. 
 -spec log_notify(sink(), [notify_options()] ) -> {ok, pid()} | {error, any()}.
 log_notify(Sink, Options) when is_pid(Sink);is_function(Sink,1) ->
     case check_options(Options) of
@@ -147,7 +150,8 @@ log_notify(Sink, Options) when is_pid(Sink);is_function(Sink,1) ->
 %% @doc Stops the worker.
 -spec stop_log_notify( pid() ) -> ok | {error, any()}.
 stop_log_notify(Pid) ->
-    ejournald_sup:stop(Pid).
+    ejournald_notifier_sup:stop(Pid).
+
 %% ----------------------------------------------------------------------------------------------------
 %% -- helpers
 %% @private
@@ -156,7 +160,7 @@ evaluate_options_notify(Sink, Options) ->
         undefined -> 
             erlang:error(badarg, {error, no_sink});
         Sink when is_pid(Sink);is_function(Sink,1) ->
-            ejournald_sup:start(?NOTIFIER, {Sink, Options})
+            ejournald_notifier_sup:start(Sink, Options)
     end.
     
 %% @private
