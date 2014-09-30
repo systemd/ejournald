@@ -37,7 +37,7 @@ start_stop_io(_Config) ->
     ok = ejournald:stop_io(test_io).
 
 start_stop_reader(_Config) ->
-    {ok, _Pid} = ejournald:start_reader(test_reader),
+    {ok, _Pid} = ejournald:start_reader(test_reader, [{dir, undefined}]),
     ok = ejournald:stop_reader(test_reader).
 
 %% ----------------------------------------------------------------------------------------------------

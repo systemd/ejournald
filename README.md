@@ -30,7 +30,7 @@ The I/O-server is is not capable of reading the journal. It can be used as an IO
 The high-level API for reading logs consists of the two function *get_logs()* and *log_notify()*. The first one will enable you to retrieve logs based on time-frames. The latter one is intended to deliver new logs as they appear in the journal. It is therefore possible to **build simple monitoring systems** using this API. Logs are always delivered in the form
 
 ```erlang
- Timestamp, LogLevel, LogData}
+{Timestamp, LogLevel, LogData}
 ```
 
 where *Timestamp* is of type [calendar:datetime1970()](http://www.erlang.org/doc/man/calendar.html#type-datetime1970), *LogLevel* is one of the eight journald log levels and *LogData* is a string or a list of strings. For example 

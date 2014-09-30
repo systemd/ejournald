@@ -25,7 +25,7 @@
 
 -export([start/2, stop/1]).
 -export([start_io/1, start_io/2, stop_io/1,
-         start_reader/0, start_reader/1, stop_reader/1,
+         start_reader/1, start_reader/2, stop_reader/1,
          get_logs/1, get_logs/2
         ]).
 -export([log_notify/2, stop_log_notify/1]).
@@ -49,6 +49,8 @@
                             erl_app |
                             erl_mod |
                             erl_fun.
+
+-type reader_options()  ::  {dir, string()}.
                             
 -type io_options()      ::  {name, string()} |
                             {log_level, log_level()} |
@@ -79,8 +81,8 @@
 %% @doc Application behaviour callback.
 start(_Type, _Args) ->
     {ok, SupPid} = ejournald_sup:start_link(),
-    start_reader(?READER),  %% default journald reader name is 'ejournald_reader'
-    start_io(journald, []), %% default io server name is 'journald'
+    start_reader(?READER, [{dir, undefined}]),  %% default journald reader name is 'ejournald_reader'
+    start_io(journald, []),                     %% default io server name is 'journald'
     {ok, SupPid}.
 
 %% @doc Application behaviour callback.
@@ -106,15 +108,15 @@ stop_io(Id) ->
 
 %% ----------------------------------------------------------------------------------------------------
 %% -- API for ejournald_reader
-%% @doc Start an unnamed reader (the default reader 'ejournald_reader' should suffice).
--spec start_reader() -> {ok, pid()} | {error, any()}.
-start_reader() ->
-    ejournald_sup:start(?READER, []).
+%% @doc Start an unnamed reader.
+-spec start_reader( [reader_options()] ) -> {ok, pid()} | {error, any()}.
+start_reader(Options) ->
+    ejournald_sup:start(?READER, Options).
 
 %% @doc Start a named reader (the default reader' ejournald_reader' should suffice).
--spec start_reader( term() ) -> {ok, pid()} | {error, any()}.
-start_reader(Name) ->
-    ejournald_sup:start(?READER, Name, []).
+-spec start_reader( term(), [reader_options()] ) -> {ok, pid()} | {error, any()}.
+start_reader(Name, Options) ->
+    ejournald_sup:start(?READER, Name, Options).
 
 %% @doc Stop a reader by its name or pid.
 -spec stop_reader( term() ) -> ok | {error, any()}.

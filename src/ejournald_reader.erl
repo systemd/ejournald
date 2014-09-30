@@ -40,13 +40,20 @@
 %% ----------------------------------------------------------------------------------------------------
 %% -- gen_server callbacks
 start_link(Options) ->
-    gen_server:start_link(?MODULE, [Options], []).
+    gen_server:start_link(?MODULE, Options, []).
     
 start_link(Name, Options) ->
-    gen_server:start_link({local, Name}, ?MODULE, [Options], []).
+    gen_server:start_link({local, Name}, ?MODULE, Options, []).
 
-init(_Options) ->
-    {ok, Ctx} = journald_api:open(),
+init(Options) ->
+    JournalDir = proplists:get_value(dir, Options),
+    case JournalDir of
+        undefined   -> 
+            {ok, Ctx} = journald_api:open();
+        _JournalDir -> 
+            BinDir = list_to_binary(JournalDir),
+            {ok, Ctx} = journald_api:open_directory(<<BinDir/binary, "\0">>)
+    end,
     State = #state{ctx = Ctx, direction = descending, time_frame = #time_frame{}},
     {ok, State}.
 
