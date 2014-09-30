@@ -215,7 +215,7 @@ static ERL_NIF_TERM nif_open_directory(ErlNifEnv* env, int argc, const ERL_NIF_T
 
     jc = enif_alloc_resource(journal_container_type, sizeof(journal_container));
     
-    int r = sd_journal_open_directory(&(jc->journal_pointer), (char*) &dir, 0);
+    int r = sd_journal_open_directory(&(jc->journal_pointer), (const char*) dir.data, 0);
     if (r < 0)
         return return_error(env, r);
     
