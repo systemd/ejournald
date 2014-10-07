@@ -37,10 +37,10 @@ reset_matches(Options, Ctx) ->
     BinaryLogLvls = [ integer_to_binary(Lvl) || Lvl <- lists:seq(0, LogLvlInt) ],
     Priority = <<"PRIORITY=">>,
     [ journald_api:add_match(Ctx, <<Priority/binary, Lvl/binary>>) || Lvl <- BinaryLogLvls ],
-    add_conjunction(Ctx, <<"ERLANG_NODE=">>, proplists:get_value(erl_node, Options)),
-    add_conjunction(Ctx, <<"SYSLOG_IDENTIFIER=">>, proplists:get_value(erl_app, Options)),
-    add_conjunction(Ctx, <<"CODE_FILE=">>, proplists:get_value(erl_mod, Options)),
-    add_conjunction(Ctx, <<"CODE_FUNC=">>, proplists:get_value(erl_fun, Options)).
+    add_conjunction(Ctx, <<"ERLANG_NODE=">>, proplists:get_value(erlang_node, Options)),
+    add_conjunction(Ctx, <<"SYSLOG_IDENTIFIER=">>, proplists:get_value(application, Options)),
+    add_conjunction(Ctx, <<"CODE_FILE=">>, proplists:get_value(code_file, Options)),
+    add_conjunction(Ctx, <<"CODE_FUNC=">>, proplists:get_value(function, Options)).
 
 add_conjunction(_Ctx, _Field, undefined) ->
     ok;

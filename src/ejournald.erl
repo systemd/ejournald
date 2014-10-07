@@ -45,10 +45,10 @@
                             info |
                             debug.
 
--type erl_opts()        ::  erl_node |
-                            erl_app |
-                            erl_mod |
-                            erl_fun.
+-type erl_opts()        ::  erlang_node |
+                            application |
+                            code_file |
+                            function.
 
 -type reader_options()  ::  {dir, string()}.
                             
@@ -113,7 +113,7 @@ stop_io(Id) ->
 start_reader(Options) ->
     ejournald_sup:start(?READER, Options).
 
-%% @doc Start a named reader (the default reader' ejournald_reader' should suffice).
+%% @doc Start a named reader.
 -spec start_reader( term(), [reader_options()] ) -> {ok, pid()} | {error, any()}.
 start_reader(Name, Options) ->
     ejournald_sup:start(?READER, Name, Options).
@@ -186,7 +186,7 @@ check_options([{log_level, LogLevel} | RestOpts]) when is_atom(LogLevel) ->
 check_options([{message, Message} | RestOpts]) when Message=:=true;Message=:=false -> 
     check_options(RestOpts);
 check_options([{ErlOpt, Value} | RestOpts]) 
-    when ErlOpt=:=erl_app;ErlOpt=:=erl_mod;ErlOpt=:=erl_fun;ErlOpt=:=erl_node,is_atom(Value) -> 
+    when ErlOpt=:=application;ErlOpt=:=code_file;ErlOpt=:=function;ErlOpt=:=erl_node,is_atom(Value) -> 
     check_options(RestOpts);
 check_options([ Arg | _RestOpts]) -> 
     {badarg, Arg}.

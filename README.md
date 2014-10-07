@@ -65,10 +65,10 @@ loop() ->
     end.
 ```
 
-You can also provide a function for working on the logs. The [lager_journald_backend](https://github.com/travelping/lager_journald_backend) is capable of storing Erlang meta information in journald. These can also be used to filter logs by Erlang application or other data:
+You can also provide a function for working on the logs. The [lager_journald_backend](https://github.com/travelping/lager_journald_backend) is capable of storing Erlang meta information in journald. These can also be used to filter logs by application or other data:
 
 ```erlang
-Logs = ejournald:get_logs([{erl_app, my_app}, {at_most, 5}]).
+Logs = ejournald:get_logs([{application, my_app}, {at_most, 5}]).
 ```
 
 This gives me the last five logs coming from the application 'my_app'. Note that meta information is logged automatically by the backend.
