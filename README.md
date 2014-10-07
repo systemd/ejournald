@@ -8,7 +8,7 @@ Installation
 
 Ejournald consists of two parts: the first part is a NIF for the communication with journald, the second is an Erlang application using it.
 
-First, you have to compile the sources in c_src/ using make. Next you can compile the erlang source in src/. 
+First, you have to compile the sources in c_src/ using make. You will need the systemd development header for that. Next you can compile the erlang source in src/. 
 
 Installation using tetrapak
 --------------------------
