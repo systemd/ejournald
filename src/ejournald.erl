@@ -66,6 +66,7 @@
 
 -type notify_options()  ::  {message, boolean()} |
                             {log_level, log_level()} |
+                            {dir, list()} |
                             {erl_opts(), atom()}.
 
 -type direction()       ::  ascending | descending.
@@ -73,7 +74,9 @@
 -type sink_fun()        ::  fun( (log_message()) -> any() ).
 -type sink()            ::  pid() | sink_fun().
 -type log_data()        ::  string() | [ string() ]. %% depends on the 'message' option
--type log_message()     ::  {datetime1970(), log_level(), log_data()} | journal_invalidate.
+-type log_message()     ::  {datetime1970(), log_level(), log_data()} |
+                            {'EXIT', pid(), atom()} |
+                            journal_invalidate.
 -type id()              ::  term() | pid().
 
 %% ----------------------------------------------------------------------------------------------------
@@ -184,6 +187,8 @@ check_options([{log_level, LogLevel} | RestOpts]) when is_atom(LogLevel) ->
         false   -> {badarg, {invalid_log_level, LogLevel}}
     end;
 check_options([{message, Message} | RestOpts]) when Message=:=true;Message=:=false -> 
+    check_options(RestOpts);
+check_options([{dir, Dir} | RestOpts]) when is_list(Dir) -> 
     check_options(RestOpts);
 check_options([{ErlOpt, Value} | RestOpts]) 
     when ErlOpt=:=application;ErlOpt=:=code_file;ErlOpt=:=function;ErlOpt=:=erl_node,is_atom(Value) -> 

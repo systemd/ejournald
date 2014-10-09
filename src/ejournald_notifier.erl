@@ -45,14 +45,25 @@ init({Sink, Options}) ->
             process_flag(trap_exit, true);
         _ -> ok
     end,
-    {ok, Ctx} = journald_api:open(),
-    ok = journald_api:seek_tail(Ctx),
-    ok = journald_api:previous(Ctx),
-    ok = journald_api:open_notifier(Ctx, self()),
+    JournalDir = proplists:get_value(dir, Options),
     Msg = proplists:get_value(message, Options, false),
-    ejournald_helpers:reset_matches(Options, Ctx),
-    State = #state{ctx = Ctx, sink = Sink, message = Msg},
-    {ok, State}.
+    case JournalDir of
+        undefined   -> 
+            {ok, Ctx} = journald_api:open(),
+            adjust_journal(Ctx, Options),
+            State = #state{ctx = Ctx, sink = Sink, message = Msg},
+            {ok, State};
+        _JournalDir -> 
+            BinDir = list_to_binary(JournalDir),
+            case journald_api:open_directory(<<BinDir/binary, "\0">>) of
+                {error, Reason} ->
+                    {stop, Reason};
+                {ok, Ctx} ->
+                    adjust_journal(Ctx, Options),
+                    State = #state{ctx = Ctx, sink = Sink, message = Msg},
+                    {ok, State}
+            end
+    end.
 
 handle_call({terminate, Reason}, _From, State) ->
     {stop, Reason, ok, State};
@@ -85,6 +96,12 @@ code_change(_,_,State) -> {ok, State}.
 
 %% ------------------------------------------------------------------------------
 %% -- notifier api
+adjust_journal(Ctx, Options) ->
+    ok = journald_api:seek_tail(Ctx),
+    ok = journald_api:previous(Ctx),
+    ok = journald_api:open_notifier(Ctx, self()),
+    ejournald_helpers:reset_matches(Options, Ctx).
+
 flush_journal(#state{ctx = Ctx, message = Msg}) ->
     collect_logs(Msg, Ctx, []).
 

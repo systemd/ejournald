@@ -49,13 +49,19 @@ init(Options) ->
     JournalDir = proplists:get_value(dir, Options),
     case JournalDir of
         undefined   -> 
-            {ok, Ctx} = journald_api:open();
+            {ok, Ctx} = journald_api:open(),
+            State = #state{ctx = Ctx, direction = descending, time_frame = #time_frame{}},
+            {ok, State};
         _JournalDir -> 
             BinDir = list_to_binary(JournalDir),
-            {ok, Ctx} = journald_api:open_directory(<<BinDir/binary, "\0">>)
-    end,
-    State = #state{ctx = Ctx, direction = descending, time_frame = #time_frame{}},
-    {ok, State}.
+            case journald_api:open_directory(<<BinDir/binary, "\0">>) of
+                {error, Reason} ->
+                    {stop, Reason};
+                {ok, Ctx} ->
+                    State = #state{ctx = Ctx, direction = descending, time_frame = #time_frame{}},
+                    {ok, State}
+            end
+    end.
 
 handle_call({evaluate, Options}, _From, State) ->
     {Result, NewState} = evaluate_log_options(Options, State),
