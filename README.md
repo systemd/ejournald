@@ -26,7 +26,10 @@ Ejournald is intended to provide logging support for [journald](http://www.freed
 - an **[Erlang I/O-server](http://www.erlang.org/doc/apps/stdlib/io_protocol.html)** for stream-like logging (without lager)
 - a high-level API for retrieving logs (possibly by Erlang specific meta information)
 
-The I/O-server is is not capable of reading the journal. It can be used as an IO device together with the [erlang io](http://erlang.org/doc/man/io.html) library. Therefore commands like *io:format()* or *io:write()* can be used in a very convenient way to write stuff into the journal without using lager. By default an I/O-server named *ejournald_io_server* is started together with ejournald. The log level (by default *info*) and other options are fixed for one I/O-server. Thus if you need other options (e.g. another log level) you need to start your own one. Note that the 'name' option (a string) is mandatory and you have to deliver a unique name for every server. This name will appear as a prefix in the journal.
+The I/O-server is is not capable of reading the journal. It can be used as an IO device together with the [erlang io](http://erlang.org/doc/man/io.html) library. Therefore commands like *io:format()* or *io:write()* can be used in a very convenient way to write stuff into the journal without using lager. 
+
+By default an I/O-server named *ejournald_io_server* is started together with ejournald. The log level (by default *info*) and other options are fixed for one I/O-server. Thus if you need other options (e.g. another log level) you need to start your own one. Note that the 'name' option (a string) is mandatory and you have to deliver a unique name for every server. This name will appear as a prefix in the journal.
+
 The high-level API for reading logs consists of the two function *get_logs()* and *log_notify()*. The first one will enable you to retrieve logs based on time-frames. The latter one is intended to deliver new logs as they appear in the journal. It is therefore possible to **build simple monitoring systems** using this API. Logs are always delivered in the form
 
 ```erlang
@@ -47,7 +50,7 @@ is roughly equivalent to *'journalctl -f'* giving you the last 10 logs in messag
 Logs = ejournald:get_logs([{direction, ascending}, {since, {{2013,12,31},{12,0,0}} }]).
 ```
 
-This gives you full logs in the order 'oldest to newest' since lunchtime of last silvester. Note that you must use UTC-time. If possible filtering should be done by ejournald since the used C-API in the background is much faster at handling this. You can use as many different log_notify()'s as you want at the same time. Different filters will be handled properly. A process handling new logs has the following layout:
+This gives you full logs in the order 'oldest to newest' since lunchtime of last silvester. Note that you must use UTC-time. If possible filtering should be done by ejournald since the used C-API in the background is much faster at handling this. You can use as many different *log_notify()*'s as you want at the same time. Different filters will be handled properly. A process handling new logs has the following layout:
 
 ```erlang
 loop() ->
@@ -65,7 +68,9 @@ loop() ->
     end.
 ```
 
-You can also provide a function for working on the logs. The [lager_journald_backend](https://github.com/travelping/lager_journald_backend) is capable of storing Erlang meta information in journald. These can also be used to filter logs by application or other data:
+You can also provide a function for working on the logs. Both *get_logs()* and *log_notify()* support regular expressions (see 'regex' option) according to the [erlang re module](http://www.erlang.org/doc/man/re.html). It is possible to search only through the 'message' part of a log or to search every single field through. 
+
+The [lager_journald_backend](https://github.com/travelping/lager_journald_backend) is capable of storing Erlang meta information in journald. These can also be used to filter logs by application or other data:
 
 ```erlang
 Logs = ejournald:get_logs([{application, my_app}, {at_most, 5}]).

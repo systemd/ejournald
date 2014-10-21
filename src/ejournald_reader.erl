@@ -88,10 +88,11 @@ evaluate_log_options(Options, State = #state{ctx = Ctx}) ->
     Since = proplists:get_value(since, Options),
     Until = proplists:get_value(until, Options),
     Msg = proplists:get_value(message, Options, false),
+    Regex = proplists:get_value(regex, Options, undefined),
     State1 = State#state{direction = Dir},
     State2 = reset_timeframe(Since, Until, State1),
     ejournald_helpers:reset_matches(Options, Ctx),
-    Result = collect_logs(Msg, AtMost, State2),
+    Result = collect_logs({Msg, Regex, AtMost}, State2),
     {Result, State2}.
 
 %% ----------------------------------------------------------------------------------------------------
@@ -167,20 +168,27 @@ move(tail, #state{ctx = Ctx}) ->
 
 %% ------------------------------------------------------------------------------
 %% -- retrieving logs
-collect_logs(Msg, AtMost, State) ->
-    collect_logs(Msg, AtMost, State, []).
-collect_logs(_Msg, 0, _State, Akk) ->
+collect_logs(Opts, State) ->
+    collect_logs(Opts, State, []).
+collect_logs({_Msg, _Regex, 0}, _State, Akk) ->
     lists:reverse(Akk);
-collect_logs(Msg, Counter, State, Akk) ->
+collect_logs(Opts = {Msg, Regex, Counter}, State, Akk) ->
     case Msg of
-        false -> Result = next_entry(State);
-        true -> Result = next_msg(State)
+        false   -> Result = next_entry(State);
+        true    -> Result = next_msg(State)
     end,
     case Result of
         no_more -> lists:reverse(Akk);
-        Log when Counter =:= undefined ->
-            collect_logs(Msg, Counter, State, [Log | Akk]);
-        Log when is_number(Counter) ->
-            collect_logs(Msg, Counter-1, State, [Log | Akk])
+        _Else   -> 
+            case ejournald_helpers:check_regex(Regex, Result) of
+                ignore when Counter =:= undefined -> 
+                    collect_logs(Opts, State, Akk);
+                ignore when is_number(Counter) -> 
+                    collect_logs({Msg, Regex, Counter-1}, State, Akk);
+                Log when Counter =:= undefined ->
+                    collect_logs(Opts, State, [Log | Akk]);
+                Log when is_number(Counter) ->
+                    collect_logs({Msg, Regex, Counter-1}, State, [Log | Akk])
+            end
     end.
 

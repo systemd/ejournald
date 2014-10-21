@@ -28,7 +28,8 @@
          move/2,
          seek_timestamp/2,
          generate_entry/1,
-         generate_msg/1]).
+         generate_msg/1,
+         check_regex/2]).
 
 reset_matches(Options, Ctx) ->
     LogLvl = proplists:get_value(log_level, Options, info),
@@ -95,6 +96,22 @@ generate_msg(Ctx) ->
             {Timestamp, Priority, Data};
         Error -> Error
     end.
+
+check_regex(undefined, Result) -> Result;
+check_regex(Regex, Log = {_,_,Data}) ->
+    case check_regex_helper(Regex, Data) of
+        true    -> Log;
+        false   -> ignore
+    end.
+
+check_regex_helper(_Regex, []) -> false;
+check_regex_helper(Regex, [ Field | Fields ]) ->
+    case re:run(Field, Regex) of
+        {match, _}  -> true;
+        _           -> check_regex_helper(Regex, Fields)
+    end;
+check_regex_helper(Regex, Data) ->
+    check_regex_helper(Regex, [Data]).
 
 reset_cursor(Cursor, Ctx) ->
     journald_api:seek_cursor(Ctx, Cursor),

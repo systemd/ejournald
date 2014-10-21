@@ -62,9 +62,11 @@
                             {at_most, integer()} |
                             {log_level, log_level()} |
                             {message, boolean()} |
+                            {regex, iodata()} |     %% must be compatible with the erlang re module
                             {erl_opts(), atom()}.
 
 -type notify_options()  ::  {message, boolean()} |
+                            {regex, iodata()} |
                             {log_level, log_level()} |
                             {dir, list()} |
                             {erl_opts(), atom()}.
@@ -179,17 +181,22 @@ check_options([{since, {{Y,M,D}, {H,Min,S}}} | RestOpts])
 check_options([{until, {{Y,M,D}, {H,Min,S}}} | RestOpts]) 
     when is_number(Y),is_number(M),is_number(D),is_number(H),is_number(Min),is_number(S) ->
     check_options(RestOpts);
-check_options([{at_most, AtMost} | RestOpts]) when is_number(AtMost) -> 
+check_options([{at_most, AtMost} | RestOpts ]) when is_number(AtMost) -> 
     check_options(RestOpts);
-check_options([{log_level, LogLevel} | RestOpts]) when is_atom(LogLevel) -> 
+check_options([{log_level, LogLevel} | RestOpts ]) when is_atom(LogLevel) -> 
     case lists:member(LogLevel, [emergency, alert, critical, error, warning, notice, info, debug]) of
         true    -> check_options(RestOpts);
         false   -> {badarg, {invalid_log_level, LogLevel}}
     end;
-check_options([{message, Message} | RestOpts]) when Message=:=true;Message=:=false -> 
+check_options([{message, Message} | RestOpts ]) when Message=:=true;Message=:=false -> 
     check_options(RestOpts);
 check_options([{dir, Dir} | RestOpts]) when is_list(Dir) -> 
     check_options(RestOpts);
+check_options([{regex, Regex} | RestOpts ]) ->
+    case re:compile(Regex) of
+        {ok, _MP}       -> check_options(RestOpts);
+        {error, Error}  -> {badarg, {Regex, Error}}
+    end;
 check_options([{ErlOpt, Value} | RestOpts]) 
     when ErlOpt=:=application;ErlOpt=:=code_file;ErlOpt=:=function;ErlOpt=:=erl_node,is_atom(Value) -> 
     check_options(RestOpts);

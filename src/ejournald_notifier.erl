@@ -30,7 +30,8 @@
 -record(state, {
     ctx, 
     sink,
-    message
+    message,
+    regex
 }).
 
 %% ----------------------------------------------------------------------------------------------------
@@ -47,11 +48,12 @@ init({Sink, Options}) ->
     end,
     JournalDir = proplists:get_value(dir, Options),
     Msg = proplists:get_value(message, Options, false),
+    Regex = proplists:get_value(regex, Options, undefined),
     case JournalDir of
         undefined   -> 
             {ok, Ctx} = journald_api:open(),
             adjust_journal(Ctx, Options),
-            State = #state{ctx = Ctx, sink = Sink, message = Msg},
+            State = #state{ctx = Ctx, sink = Sink, message = Msg, regex = Regex},
             {ok, State};
         _JournalDir -> 
             BinDir = list_to_binary(JournalDir),
@@ -60,7 +62,7 @@ init({Sink, Options}) ->
                     {stop, Reason};
                 {ok, Ctx} ->
                     adjust_journal(Ctx, Options),
-                    State = #state{ctx = Ctx, sink = Sink, message = Msg},
+                    State = #state{ctx = Ctx, sink = Sink, message = Msg, regex = Regex},
                     {ok, State}
             end
     end.
@@ -102,8 +104,8 @@ adjust_journal(Ctx, Options) ->
     ok = journald_api:open_notifier(Ctx, self()),
     ejournald_helpers:reset_matches(Options, Ctx).
 
-flush_journal(#state{ctx = Ctx, message = Msg}) ->
-    collect_logs(Msg, Ctx, []).
+flush_journal(#state{ctx = Ctx, message = Msg, regex = Regex}) ->
+    collect_logs({Msg, Regex}, Ctx, []).
 
 %% ----------------------------------------------------------------------------------------------------
 %% -- retrieving logs
@@ -122,14 +124,18 @@ next_msg(Ctx) ->
             Error
     end.
 
-collect_logs(Msg, Ctx, Akk) ->
+collect_logs(Opts = {Msg, Regex}, Ctx, Akk) ->
     case Msg of
         false -> Result = next_entry(Ctx);
         true -> Result = next_msg(Ctx)
     end,
     case Result of
         no_more -> lists:reverse(Akk);
-        Log -> collect_logs(Msg, Ctx, [Log | Akk])
+        _Else   -> 
+            case ejournald_helpers:check_regex(Regex, Result) of
+                ignore -> collect_logs(Opts, Ctx, Akk);
+                Log -> collect_logs(Opts, Ctx, [Log | Akk])
+            end
     end.
 
 
