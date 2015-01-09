@@ -3,9 +3,9 @@ CC ?= gcc
 RM ?= rm
 CFLAGS ?= -O2
 
-override CFLAGS += -std=gnu99  -Wall -fpic -I. $(shell erl -noinput -eval 'io:format("-I~s/erts-~s/include", [code:root_dir(), erlang:system_info(version)]), halt(0).') $(shell pkg-config --cflags libsystemd)
+override CFLAGS += -std=gnu99  -Wall -fpic -I. $(shell erl -noinput -eval 'io:format("-I~s/erts-~s/include", [code:root_dir(), erlang:system_info(version)]), halt(0).') $(shell pkg-config --cflags libsystemd-journal)
 
-override LDFLAGS += -shared -fpic $(shell pkg-config --libs libsystemd)
+override LDFLAGS += -shared -fpic $(shell pkg-config --libs libsystemd-journal)
 
 all : $(PRIVDIR)/journald_api.so
 
