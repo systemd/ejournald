@@ -3,3 +3,4 @@ ebin/
 *.o
 .arcconfig
 tetrapak/.local.cache
+log/
