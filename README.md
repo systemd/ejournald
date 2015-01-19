@@ -29,17 +29,24 @@ The I/O-server is is not capable of reading the journal. It can be used as an IO
 
 To test this setup via simply sending error messages from an erlang shell, do the following:
 Start ejournald:
-	> application:ensure_all_started(ejournald).
-	> {ok,[ejournald]}
+> application:ensure_all_started(ejournald).
+>
+> {ok,[ejournald]}
+
 Set the handler for the lager backend:
-	> application:set_env(lager, handlers, [{lager_journald_backend, []}]).
+> application:set_env(lager, handlers, [{lager_journald_backend, []}]).
+
 Start lager:
-	> lager:start().
+> lager:start().
+
 Send an error message (which the backend sends to the journal)
-	> lager:log(error, [{pid, self()}, {module, module}, {function, function}, {line, 0}], "hello world").
+> lager:log(error, [{pid, self()}, {module, module}, {function, function}, {line, 0}], "hello world").
+
 Then simply check your journal for the corresponding message:
-	> # journalctl
-	> ...
-	> Jan 16 13:16:18 tpiadmin-HP-EliteBook-8470p beam.smp[7481]: hello world
+> \# journalctl
+>
+> \.\.\.
+>
+> Jan 16 13:16:18 tpiadmin-HP-EliteBook-8470p beam.smp[7481]: hello world
 
 See edocs for more information. 
