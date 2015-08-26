@@ -4,3 +4,4 @@ ebin/
 .arcconfig
 tetrapak/.local.cache
 log/
+check-journald
