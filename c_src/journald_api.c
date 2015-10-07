@@ -121,7 +121,10 @@ static ERL_NIF_TERM nif_sendv(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
             iov[i].iov_len = item.size;
             i++;
         }
-        else len--;                            // skip bad argument
+        else {
+            sd_journal_print(LOG_ERR, "skipped a journal field");
+            len--;                            // skip bad argument
+        }
 
     } while(enif_get_list_cell(env, tail, &buffer, &tail));
 

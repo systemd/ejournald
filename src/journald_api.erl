@@ -86,11 +86,43 @@ list_conversion([_|T]) ->                          % skip bad argument
     list_conversion(T);
 list_conversion(_) -> [].                         
 
+% convert all data types accordingly
+% (see http://erlang.org/doc/reference_manual/data_types.html)
+% ------------------------------------------------------------
+% Number
 to_list(V) when is_integer(V) -> integer_to_list(V);
 to_list(V) when is_float(V)   -> float_to_list(V);
+% Atom
 to_list(V) when is_atom(V)    -> atom_to_binary(V, utf8);
+% Binary
+% -- will be sent through without conversion
+% Fun
+to_list(V) when is_function(V)-> io_lib:format("~p", [V]);
+% Port Identifier
+to_list(V) when is_port(V)    -> io_lib:format("~p", [V]);
+% Pid
 to_list(V) when is_pid(V)     -> pid_to_list(V);
-to_list(V) -> V. 
+% Tuple
+to_list(V) when is_tuple(V)   -> io_lib:format("~p", [V]);
+% Map
+to_list(V) when is_map(V)     -> io_lib:format("~p", [V]);
+% List
+to_list(V) when is_list(V)    -> list_to_string(V);
+% String
+% -- same as list
+% Record
+% -- same as tuple
+% Boolean
+% -- same as atoms
+% anything else will given plainly to the journal api
+to_list(V) -> V.
+
+list_to_string (V) ->
+  try io_lib:format('~s', [V])
+  catch _:_ ->
+    io_lib:format('~p', [V])
+  end.
+
 
 load_nif() ->
     Dir = "priv",
