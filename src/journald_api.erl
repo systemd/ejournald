@@ -25,9 +25,9 @@
 
 %% External API
 -export([sendv/1, stream_fd/3, write_fd/2, close_fd/1,
-        open/0, open_directory/1, close/1, next/1, 
-        previous/1, get_data/2, add_match/2,  
-        add_disjunction/1, add_conjunction/1, flush_matches/1, seek_head/1, seek_tail/1,  
+        open/0, open_directory/1, close/1, next/1,
+        previous/1, get_data/2, add_match/2,
+        add_disjunction/1, add_conjunction/1, flush_matches/1, seek_head/1, seek_tail/1,
         get_cursor/1, test_cursor/2, seek_cursor/2, query_unique/2,
         enumerate_unique/1, restart_unique/1, open_notifier/2,
         enumerate_data/1, restart_data/1, close_notifier/1,
@@ -54,16 +54,16 @@ write_fd(_Fd, _Msg) -> ?nif_stub.
 close_fd(_Fd) -> ?nif_stub.
 open() -> ?nif_stub.
 open_directory(_Arg) -> ?nif_stub.
-close(_Arg) -> ?nif_stub.    
+close(_Arg) -> ?nif_stub.
 next(_Arg) -> ?nif_stub.
-previous(_Arg) -> ?nif_stub. 
-get_data(_Arg1, _Arg2) -> ?nif_stub. 
-add_match(_Arg1, _Arg2) -> ?nif_stub. 
-add_disjunction(_Arg) -> ?nif_stub. 
-add_conjunction(_Arg) -> ?nif_stub. 
-flush_matches(_Arg) -> ?nif_stub. 
-seek_head(_Arg) -> ?nif_stub. 
-seek_tail(_Arg) -> ?nif_stub. 
+previous(_Arg) -> ?nif_stub.
+get_data(_Arg1, _Arg2) -> ?nif_stub.
+add_match(_Arg1, _Arg2) -> ?nif_stub.
+add_disjunction(_Arg) -> ?nif_stub.
+add_conjunction(_Arg) -> ?nif_stub.
+flush_matches(_Arg) -> ?nif_stub.
+seek_head(_Arg) -> ?nif_stub.
+seek_tail(_Arg) -> ?nif_stub.
 get_cursor(_Arg) -> ?nif_stub.
 test_cursor(_Arg1, _Arg2) -> ?nif_stub.
 seek_cursor(_Arg1, _Arg2) -> ?nif_stub.
@@ -81,10 +81,10 @@ seek_realtime_usec(_Journal, _Usec) -> ?nif_stub.
 %% -- helpers
 list_conversion([])    -> [];
 list_conversion([{E,V}|T])  ->
-    [[E, $=, to_list(V)] | list_conversion(T)]; 
+    [[E, $=, to_list(V)] | list_conversion(T)];
 list_conversion([_|T]) ->                          % skip bad argument
     list_conversion(T);
-list_conversion(_) -> [].                         
+list_conversion(_) -> [].
 
 % convert all data types accordingly
 % (see http://erlang.org/doc/reference_manual/data_types.html)
@@ -126,9 +126,9 @@ list_to_string (V) ->
 
 load_nif() ->
     Dir = "priv",
-    PrivDir = case code:priv_dir(ejournald) of      % check existence of priv folder 
-        {error, _} -> Dir; 
+    PrivDir = case code:priv_dir(ejournald) of      % check existence of priv folder
+        {error, _} -> Dir;
         X -> X
     end,
-    Lib = filename:join(PrivDir, "journald_api"),   % create priv path so journald_api.so 
-    erlang:load_nif(Lib, 0).                        % load NIF 
+    Lib = filename:join(PrivDir, "journald_api"),   % create priv path so journald_api.so
+    erlang:load_nif(Lib, 0).                        % load NIF
