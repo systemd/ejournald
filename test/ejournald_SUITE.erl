@@ -28,7 +28,7 @@
 
 -define(CONTROL, {control, [], [start_stop_io, start_stop_reader]}).
 -define(READ, {read, [], [read_last_3_logs, read_last_3_messages, read_since, read_since_until, notify]}).
--define(WRITE, {write, [], [io_put_chars, io_format, io_write, io_fwrite]}).
+-define(WRITE, {write, [], [io_put_chars, io_format, io_write, io_fwrite, io_fieldtypes]}).
 
 %% ----------------------------------------------------------------------------------------------------
 %% -- testcases CONTROL
@@ -42,7 +42,7 @@ start_stop_reader(_Config) ->
 
 %% ----------------------------------------------------------------------------------------------------
 %% -- testcases WRITING
-io_put_chars(_Config) -> 
+io_put_chars(_Config) ->
     ok = io:put_chars(?IO_SERVER, "put_chars1"),
     ok = io:put_chars(?IO_SERVER, " put_chars2"),
     ok = io:put_chars(?IO_SERVER, " written by io:put_char()"),
@@ -61,6 +61,24 @@ io_fwrite(_Config) ->
     ok = io:fwrite(?IO_SERVER, "Some string by io:fwrite(): ", []),
     ok = io:fwrite(?IO_SERVER, "|~10.5c|~-10.5c|~5c|~n", [$a, $b, $c]),
     ok = io:nl(?IO_SERVER).
+
+io_fieldtypes(_Config) ->
+        Fun = fun (X) -> X+1 end,
+        Atom = testatom,
+        Pid = spawn(m, f, []),
+        Tup = {adam,24,{july,29}},
+        Map = #{name=>adam,age=>24,date=>{july,29}},
+        List = [a,2,{c,4}],
+        Str = "teststring",
+    journald_api:sendv([{"MESSAGE", "testmessage"},
+        {"TEST_ATOM", Atom},
+        {"TEST_FUNCTION", Fun},
+        {"TEST_PID", Pid},
+        {"TEST_TUPLE", Tup},
+        {"TEST_MAP", Map},
+        {"TEST_LIST", List},
+        {"TEST_STRING", Str}
+        ]).
 
 %% ----------------------------------------------------------------------------------------------------
 %% -- testcases READING
@@ -108,7 +126,7 @@ all() -> [{group, control}, {group, write}, {group, read}].
 init_per_suite(Config) ->
     application:start(ejournald),
     Config.
-    
+
 end_per_suite(_Config) ->
     application:stop(ejournald).
 
@@ -121,7 +139,7 @@ mod(0,_Y) -> 0.
 receive_flush(0) -> ok;
 receive_flush(N) ->
     receive
-        {_Timestamp, _Priority, Log} -> 
+        {_Timestamp, _Priority, Log} ->
             ct:log(binary_to_list(Log)),
             receive_flush(N-1);
         journal_invalidate ->
